@@ -1,0 +1,323 @@
+{
+  "name": "Test 3",
+  "nodes": [
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "requestMethod": "POST",
+        "url": "https://dev.azure.com/ProyectoTIC/ProyectoDTIC/_apis/wit/wiql?api-version=7.1-preview.2",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "{ \"query\": \"SELECT [System.Id], [System.WorkItemType] FROM WorkItems WHERE [System.WorkItemType] = 'User Story' AND [System.State] IN ('New', 'Active', 'Committed') AND [System.IterationPath] = 'ProyectoDTIC\\\\Sprint 6' ORDER BY [Microsoft.VSTS.Scheduling.StoryPoints] DESC, [System.ChangedDate] DESC\" }"
+      },
+      "name": "Query Azure HUs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        800,
+        40
+      ],
+      "id": "01a0ebab-6bb7-4216-a903-1dcef37ecced",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "4NQ9UmQW3OJXw7fT",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const workItems = $json.workItems || []\nreturn workItems.map(item => ({ json: { id: item.id } }));"
+      },
+      "name": "Extract HU IDs",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1060,
+        40
+      ],
+      "id": "dc90b14b-3278-4793-bc87-bca8947ae8e2"
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "url": "={{`https://dev.azure.com/ProyectoTIC/ProyectoDTIC/_apis/wit/workitems/${$json.id}?api-version=7.1-preview.2`}}",
+        "jsonParameters": true,
+        "options": {}
+      },
+      "name": "Get HU Detail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        40
+      ],
+      "id": "57ef0bf8-f769-4702-9af6-34e9c5dd5715",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "4NQ9UmQW3OJXw7fT",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const fields = $json.fields || {};\n\nconst processedData = {\n  id: $json.id,\n  title: fields[\"System.Title\"] || \"\",\n  description: fields[\"System.Description\"] || \"\",\n  acceptanceCriteria: fields[\"Microsoft.VSTS.Common.AcceptanceCriteria\"] || \"\",\n  storyPoints: fields[\"Microsoft.VSTS.Scheduling.StoryPoints\"] || 0,\n  assignee: fields[\"System.AssignedTo\"]?.displayName || \"Sin asignar\",\n  state: fields[\"System.State\"] || \"\",\n  iterationPath: fields[\"System.IterationPath\"] || \"\",\n  domainArea: \"user-management\",\n  component: \"report\",\n  userType: \"coordinator\",\n  branchName: `feature/HU-${$json.id}`,\n  processedAt: new Date().toISOString(),\n  source: \"azure-devops\",\n  needs: {\n    controller: true,\n    service: false,\n    entity: false\n  }\n};\n\nreturn {\n  json: processedData\n};\n"
+      },
+      "name": "Process HU",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        40
+      ],
+      "id": "756a489e-816d-4b3d-96ac-2c67f323c1de"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.needs.controller}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "IF Controller",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        40
+      ],
+      "id": "2e4e30d8-6641-4048-aa1b-e759df252551"
+    },
+    {
+      "parameters": {
+        "executeOnce": false,
+        "command": "=#!/bin/bash\n\nmkdir -p /home/node/generated/prompts/{{ $itemIndex }}\n\ncat <<EOF > /home/node/generated/prompts/{{$itemIndex}}/prompt.md\n{{$json.output}}\nEOF\n"
+      },
+      "name": "Gen Controller Prompt",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1460,
+        260
+      ],
+      "id": "46965134-57bd-45b4-83a8-6e7b13380270"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        840,
+        -200
+      ],
+      "id": "28c87860-cee1-40a0-afc6-f05a71fc9b6e",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.id.toString() }}",
+        "options": {
+          "systemMessage": "=Eres un generador de prompts para GitHub Copilot Agent. Dado el siguiente contexto de historia de usuario, genera un prompt para que el Copilot construya la arquitectura y archivos necesarios en NestJS que cumpla con los siguiente:\n\nComponente: {{$json.component}}\nDominio: {{$json.domainArea}}\nTítulo: {{$json.title}}\nDescripción: {{$json.description}}\nCriterios de aceptación: {{$json.acceptanceCriteria}}\n\nFormato esperado:\n[Prompt generado listo para ser usado con Copilot Agent]\n\n\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        240
+      ],
+      "id": "e43ef0ce-3427-4610-adbb-97ead111f747",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.id.toString() }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1160,
+        460
+      ],
+      "id": "66f6462e-d954-45db-ba8f-c9e132641143",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-4-20250514",
+          "mode": "list",
+          "cachedResultName": "Claude Sonnet 4"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        640,
+        320
+      ],
+      "id": "7a5756f3-ef12-4f6a-9e16-5ab27235e947",
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "D4GoPa04EyHDPvtw",
+          "name": "Anthropic account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1000,
+        420
+      ],
+      "id": "9f3e4a68-2fbe-4c7c-a7d3-d9a4e12229e8",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "4I23lYoaI3mIdpiI",
+          "name": "OpenAi account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "IF Controller": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Azure HUs": {
+      "main": [
+        [
+          {
+            "node": "Extract HU IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract HU IDs": {
+      "main": [
+        [
+          {
+            "node": "Get HU Detail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get HU Detail": {
+      "main": [
+        [
+          {
+            "node": "Process HU",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process HU": {
+      "main": [
+        [
+          {
+            "node": "IF Controller",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Query Azure HUs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Gen Controller Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        []
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "757aba34-7a31-444d-9d4c-06986d2a0105",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b5b5c0e9b03b312d899781774e93f022e4b1d8d1c85f34e71d42a999a81b1ce7"
+  },
+  "id": "Y7j9nuQgcV4Sz2qU",
+  "tags": []
+}
