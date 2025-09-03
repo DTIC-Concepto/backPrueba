@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  # Base de datos PostgreSQL para desarrollo
+  postgres-dev:
+    image: postgres:15-alpine
+    container_name: poliacredita-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: poliacredita_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5433:5432"  # Puerto diferente para no conflictar
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - poliacredita-dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d poliacredita_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Aplicación NestJS en modo desarrollo con hot-reload
+  api-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: poliacredita-api-dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_HOST: postgres-dev
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_NAME: poliacredita_dev
+    ports:
+      - "3001:3000"  # Puerto diferente para desarrollo
+      - "9229:9229"  # Puerto para debugging
+    depends_on:
+      postgres-dev:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./logs:/app/logs
+    networks:
+      - poliacredita-dev-network
+    command: npm run start:dev
+
+  # Adminer para desarrollo
+  adminer-dev:
+    image: adminer:4.8.1
+    container_name: poliacredita-adminer-dev
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres-dev
+      ADMINER_DESIGN: pappu687
+    depends_on:
+      - postgres-dev
+    networks:
+      - poliacredita-dev-network
+
+volumes:
+  postgres_dev_data:
+    driver: local
+
+networks:
+  poliacredita-dev-network:
+    driver: bridge
+    name: poliacredita-dev-network

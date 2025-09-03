@@ -1,0 +1,39 @@
+# Dockerfile para desarrollo con hot-reload
+FROM node:18-alpine
+
+# Instalar herramientas de desarrollo
+RUN apk add --no-cache bash git
+
+# Crear usuario para desarrollo
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nestjs -u 1001
+
+# Establecer directorio de trabajo
+WORKDIR /app
+
+# Cambiar propietario del directorio
+RUN chown nestjs:nodejs /app
+
+# Cambiar al usuario de desarrollo
+USER nestjs
+
+# Copiar archivos de configuración
+COPY --chown=nestjs:nodejs package*.json ./
+COPY --chown=nestjs:nodejs tsconfig*.json ./
+COPY --chown=nestjs:nodejs nest-cli.json ./
+
+# Instalar todas las dependencias (incluidas las de desarrollo)
+RUN npm ci
+
+# Copiar el código fuente
+COPY --chown=nestjs:nodejs . .
+
+# Exponer puertos para la aplicación y debugging
+EXPOSE 3000 9229
+
+# Variables de entorno para desarrollo
+ENV NODE_ENV=development
+ENV PORT=3000
+
+# Comando por defecto para desarrollo con hot-reload
+CMD ["npm", "run", "start:dev"]
