@@ -18,6 +18,7 @@ jobs:
       - name: Install DeepSource CLI
         run: |
           curl -sSL https://deepsource.io/cli | bash
+          echo "$HOME/.deepsource/bin" >> $GITHUB_PATH
 
       - name: Run DeepSource analysis
         env:
