@@ -10,7 +10,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to Railway
+    name: Deploy to Railway1
     needs: deepsource
     runs-on: ubuntu-latest
     steps:
