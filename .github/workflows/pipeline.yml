@@ -1,4 +1,4 @@
-name: DeepSource Analysis
+name: Deploy to Railway
 
 on:
   push:
@@ -10,8 +10,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to Railway1
-    needs: deepsource
+    name: Deploy to Railway
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
