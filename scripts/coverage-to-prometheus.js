@@ -4,7 +4,7 @@ const path = require('path');
 const axios = require('axios');
 
 // Lee la variable de entorno con la URL del Pushgateway
-const PUSHGATEWAY_URL = http://192.168.1.22:9091/metrics/job/nestjs_pipeline;
+const PUSHGATEWAY_URL = 'http://192.168.1.22:9091/metrics/job/nestjs_pipeline';
 
 if (!PUSHGATEWAY_URL) {
   console.error('Error: Debes definir la variable PUSHGATEWAY_URL');
