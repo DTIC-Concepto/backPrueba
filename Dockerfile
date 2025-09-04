@@ -9,8 +9,8 @@ COPY package*.json ./
 COPY tsconfig*.json ./
 COPY nest-cli.json ./
 
-# Instalar dependencias
-RUN npm ci --only=production && npm cache clean --force
+# Instalar TODAS las dependencias (incluye devDependencies necesarias para build)
+RUN npm ci && npm cache clean --force
 
 # Copiar el código fuente
 COPY src/ ./src/
@@ -18,12 +18,13 @@ COPY src/ ./src/
 # Construir la aplicación
 RUN npm run build
 
+# ============================
 # Etapa de producción
+# ============================
 FROM node:18-alpine AS production
 
 # Crear usuario no-root para seguridad
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nestjs -u 1001
+RUN addgroup -g 1001 -S nodejs && adduser -S nestjs -u 1001
 
 # Establecer el directorio de trabajo
 WORKDIR /app
@@ -50,7 +51,7 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# Comando de inicio con health check básico
+# Healthcheck
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node healthcheck.js || exit 1
 
@@ -59,14 +60,10 @@ USER root
 RUN echo 'const http = require("http"); \
 const options = { host: "localhost", port: process.env.PORT || 3000, timeout: 2000 }; \
 const request = http.request(options, (res) => { \
-  console.log(`STATUS: ${res.statusCode}`); \
   process.exitCode = (res.statusCode === 200) ? 0 : 1; \
   process.exit(); \
 }); \
-request.on("error", function(err) { \
-  console.log("ERROR"); \
-  process.exit(1); \
-}); \
+request.on("error", function() { process.exit(1); }); \
 request.end();' > healthcheck.js
 
 USER nestjs
