@@ -1,24 +1,29 @@
-
-name: CI/CD Pipeline
+name: DeepSource Analysis
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   deepsource:
-    name: DeepSource Analysis
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Install DeepSource CLI
+        run: |
+          curl -sSL https://deepsource.io/cli | bash
+
       - name: Run DeepSource analysis
-        uses: deepsource/cli-action@v1
-        with:
-          api-key: ${{ secrets.DEEPSOURCE_API_KEY }}
+        env:
+          DEEPSOURCE_DSN: ${{ secrets.DEEPSOURCE_DSN }}
+        run: |
+          deepsource analyze
 
   deploy:
     name: Deploy to Railway
