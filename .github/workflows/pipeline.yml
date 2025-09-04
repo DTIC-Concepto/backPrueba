@@ -8,7 +8,7 @@ jobs:
   metrics:
     runs-on: ubuntu-latest
     env:
-      PUSHGATEWAY_URL: "http://localhost:9091/metrics/job/nestjs_pipeline"
+      PUSHGATEWAY_URL: "http://192.168.1.22:9091/metrics/job/nestjs_pipeline"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
