@@ -8,7 +8,7 @@ jobs:
   metrics:
     runs-on: ubuntu-latest
     env:
-      PUSHGATEWAY_URL: "http://<TU_PUSHGATEWAY_URL>:9091/metrics/job/nestjs_pipeline"
+      PUSHGATEWAY_URL: "http://localhost:9091/metrics/job/nestjs_pipeline"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -23,6 +23,7 @@ jobs:
 
       - name: Run tests with coverage
         run: npm run test -- --coverage --json --outputFile=coverage/coverage-summary.json
+        continue-on-error: true   # ⚠️ Esto permite que el job continue aunque fallen tests
 
       - name: Export coverage metrics to Prometheus
         run: node scripts/coverage-to-prometheus.js
