@@ -7,7 +7,6 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    container: ghcr.io/railwayapp/cli:latest
     env:
       SVC_ID: 3f54df2e-6432-406a-a6d1-3d7d78b99dff
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
@@ -15,12 +14,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Install Railway CLI
+        run: |
+          curl -fsSL https://railway.app/install.sh | sh
+
       - name: Report results to DeepSource
         env:
           DEEPSOURCE_DSN: ${{ secrets.DEEPSOURCE_DSN }}
         run: |
           # Instalar DeepSource CLI
-          curl https://deepsource.io/cli | sh
+          curl -fsSL https://deepsource.io/cli | sh
 
           # Ejecutar reporte de cobertura
           ./bin/deepsource report --analyzer test-coverage --key python --value-file ./path/to/report
