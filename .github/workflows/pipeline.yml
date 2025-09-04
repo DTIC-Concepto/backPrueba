@@ -22,8 +22,7 @@ jobs:
         run: npm install
 
       - name: Run tests with coverage
-        run: npm run test -- --coverage --json --outputFile=coverage/coverage-summary.json
-        continue-on-error: true   # ⚠️ Esto permite que el job continue aunque fallen tests
+        run: npm run test:cov || true  # ⚠️ Permite que continúe aunque fallen tests
 
       - name: Export coverage metrics to Prometheus
         run: node scripts/coverage-to-prometheus.js
