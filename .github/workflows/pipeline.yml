@@ -5,28 +5,35 @@ on:
     branches: [main]
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     env:
       SVC_ID: 3f54df2e-6432-406a-a6d1-3d7d78b99dff
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      DEEPSOURCE_DSN: ${{ secrets.DEEPSOURCE_DSN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests and generate coverage
+        run: npm run test -- --coverage
+
+      - name: Install DeepSource CLI
+        run: curl -fsSL https://deepsource.io/cli | sh
+
+      - name: Report coverage to DeepSource
+        run: ./bin/deepsource report --analyzer test-coverage --key javascript --value-file ./coverage/lcov.info
+
       - name: Install Railway CLI
-        run: |
-          curl -fsSL https://railway.app/install.sh | sh
-
-      - name: Report results to DeepSource
-        env:
-          DEEPSOURCE_DSN: ${{ secrets.DEEPSOURCE_DSN }}
-        run: |
-          # Instalar DeepSource CLI
-          curl -fsSL https://deepsource.io/cli | sh
-
-          # Ejecutar reporte de cobertura
-          ./bin/deepsource report --analyzer test-coverage --key python --value-file ./path/to/report
+        run: curl -fsSL https://railway.app/install.sh | sh
 
       - name: Deploy to Railway
         run: railway up --service=${{ env.SVC_ID }}
