@@ -4,14 +4,18 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 jobs:
   ci:
-    name: Build, Test, and Analyze
+    name: Build, Test, and Analyze with SonarCloud
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -24,11 +28,17 @@ jobs:
       - name: Run Unit Tests with Coverage
         run: npm run test:cov
 
-      - name: Submit to DeepSource
-        uses: deepsource-actions/cli@v1.1.2
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v2.2.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          deepsource_token: ${{ secrets.DEEPSOURCE_TOKEN }}
-        
+          args: >
+            -Dsonar.javascript.lcov.reportPaths=./coverage/lcov.info
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+
   deploy:
     name: Deploy to Railway
     needs: ci
@@ -41,6 +51,5 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
-
       - name: Deploy to Railway
         run: railway up --service=${{ env.SVC_ID }}
