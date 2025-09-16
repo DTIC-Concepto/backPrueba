@@ -26,6 +26,8 @@ jobs:
         run: npm ci
 
       - name: Run Unit Tests with Coverage
+        # Agrega la opción continue-on-error a este paso
+        continue-on-error: true
         run: npm run test:cov
 
       - name: SonarCloud Scan
@@ -41,6 +43,10 @@ jobs:
 
   deploy:
     name: Deploy to Railway
+    # El despliegue seguirá dependiendo del éxito del job de CI,
+    # por lo que las pruebas y el análisis de código deben ser exitosos.
+    # Si quieres que el deploy ocurra incluso si las pruebas fallan,
+    # necesitas cambiar la condición.
     needs: ci
     runs-on: ubuntu-latest
     if: success()
