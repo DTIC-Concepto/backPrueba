@@ -1,16 +1,46 @@
-name: Deploy to Railway
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
-  deploy:
+  ci:
+    name: Build, Test, and Analyze
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Unit Tests with Coverage
+        run: npm run test:cov
+
+      - name: Submit to DeepSource
+        uses: deepsource-actions/cli@v1.1.2
+        with:
+          deepsource_token: ${{ secrets.DEEPSOURCE_TOKEN }}
+        
+  deploy:
+    name: Deploy to Railway
+    needs: ci
+    runs-on: ubuntu-latest
+    if: success()
     container: ghcr.io/railwayapp/cli:latest
     env:
       SVC_ID: 3f54df2e-6432-406e-a6d1-3d7d78b99dff
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}    
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
-      - uses: actions/checkout@v3
-      - run: railway up --service=${{ env.SVC_ID }}
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Deploy to Railway
+        run: railway up --service=${{ env.SVC_ID }}
