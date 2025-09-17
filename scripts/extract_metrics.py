@@ -3,6 +3,7 @@ import requests
 import json
 from datetime import datetime
 import mlflow
+import re
 
 # 1. Configuración del entorno y tokens
 api_url = os.environ.get('GITHUB_API_URL', 'https://api.github.com')
@@ -24,6 +25,12 @@ if not mlflow_tracking_uri:
 
 mlflow.set_tracking_uri(mlflow_tracking_uri)
 mlflow.set_experiment("Pipeline Performance")
+
+# Función para sanitizar nombres de jobs
+def sanitize_name(name):
+    # Reemplaza cualquier carácter que no sea alfanumérico, guión bajo, guión, punto, espacio,
+    # dos puntos o barra con un guión bajo.
+    return re.sub(r'[^a-zA-Z0-9_.-/ :]', '_', name)
 
 # 3. Obtención de datos del workflow
 try:
@@ -47,20 +54,23 @@ with mlflow.start_run():
             start_time_str = job['started_at']
             end_time_str = job['completed_at']
             
-            # Convertir las cadenas de tiempo a objetos datetime
+            # Convierte las cadenas de tiempo a objetos datetime
             start_time = datetime.fromisoformat(start_time_str[:-1])
             end_time = datetime.fromisoformat(end_time_str[:-1])
             
-            # Calcular la duración en segundos
+            # Calcula la duración en segundos
             duration_seconds = (end_time - start_time).total_seconds()
 
+            # Sanitiza el nombre del job antes de registrarlo
+            sanitized_job_name = sanitize_name(job['name'])
+            
             # Registra la métrica de duración en MLflow
-            mlflow.log_metric(f"{job['name']}_duration_seconds", duration_seconds)
+            mlflow.log_metric(f"{sanitized_job_name}_duration_seconds", duration_seconds)
             
             # Registra el estado del job como parámetro
-            mlflow.log_param(f"{job['name']}_status", job['conclusion'])
+            mlflow.log_param(f"{sanitized_job_name}_status", job['conclusion'])
             
-            print(f"Métrica registrada para el job '{job['name']}': {duration_seconds} segundos, Estado: {job['conclusion']}")
+            print(f"Métrica registrada para el job '{job['name']}' (sanitizado: '{sanitized_job_name}'): {duration_seconds} segundos, Estado: {job['conclusion']}")
             
         except (KeyError, TypeError) as e:
             print(f"Error al procesar el job '{job.get('name', 'N/A')}': Falta una clave o el tipo de dato es incorrecto. Error: {e}")
