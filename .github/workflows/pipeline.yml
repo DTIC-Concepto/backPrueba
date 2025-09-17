@@ -59,3 +59,28 @@ jobs:
         uses: actions/checkout@v3
       - name: Deploy to Railway
         run: railway up --service=${{ env.SVC_ID }}
+  mlflow-tracking:
+    name: Log Metrics to MLflow
+    needs: [ci, deploy]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.x'
+
+      - name: Install Dependencies
+        run: pip install requests mlflow
+
+      - name: Execute MLflow Tracking Script
+        run: python scripts/extract_metrics.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pasa el secreto con la URL de tu servidor de MLflow
+          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SHA: ${{ github.sha }}
