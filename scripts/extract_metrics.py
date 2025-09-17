@@ -11,10 +11,11 @@ owner = os.environ['GITHUB_REPOSITORY_OWNER']
 repo = os.environ['GITHUB_REPOSITORY'].split('/')[1]
 run_id = os.environ['GITHUB_RUN_ID']
 token = os.environ['GITHUB_TOKEN']
+current_job_id = os.environ['GITHUB_JOB'] # Obtiene el ID del job actual
 
 headers = {
     'Authorization': f'token {token}',
-    'Accept': 'application/vnd.github.v3+json'
+    'Accept': 'application/vnd.github.com+json'
 }
 
 # 2. Configuración del servidor MLflow desde el entorno
@@ -28,14 +29,18 @@ mlflow.set_experiment("Pipeline Performance")
 
 # Función para sanitizar nombres de jobs
 def sanitize_name(name):
-    # Reemplaza cualquier carácter que no sea alfanumérico, guión bajo, guión, punto, espacio,
-    # dos puntos o barra con un guión bajo.
-    return re.sub(r'[^a-zA-Z0-9_.-/ :]', '_', name)
+    """
+    Sanitiza un nombre de cadena para que sea compatible con los nombres de métricas de MLflow.
+    Reemplaza cualquier carácter no permitido con un guión bajo.
+    """
+    # Expresión regular que permite alfanuméricos, guiones bajos, guiones, puntos, espacios, dos puntos y barras
+    sanitized = re.sub(r'[^a-zA-Z0-9_.\- :/]', '_', name)
+    return sanitized.strip().replace(' ', '_')
 
 # 3. Obtención de datos del workflow
 try:
     response = requests.get(f'{api_url}/repos/{owner}/{repo}/actions/runs/{run_id}/jobs', headers=headers)
-    response.raise_for_status()  # Lanza un error para códigos de estado HTTP 4xx/5xx
+    response.raise_for_status()
     jobs_data = response.json()['jobs']
 except requests.exceptions.RequestException as e:
     print(f"Error al obtener datos de la API de GitHub: {e}")
@@ -50,10 +55,18 @@ with mlflow.start_run():
 
     # Extrae y registra métricas por cada job
     for job in jobs_data:
+        # Ignorar el job actual (mlflow-tracking) ya que no ha terminado
+        if str(job['id']) == current_job_id:
+            continue
+        
+        # Ignorar jobs con conclusión nula
+        if job['conclusion'] is None:
+            continue
+
         try:
             start_time_str = job['started_at']
             end_time_str = job['completed_at']
-            
+
             # Convierte las cadenas de tiempo a objetos datetime
             start_time = datetime.fromisoformat(start_time_str[:-1])
             end_time = datetime.fromisoformat(end_time_str[:-1])
@@ -73,6 +86,6 @@ with mlflow.start_run():
             print(f"Métrica registrada para el job '{job['name']}' (sanitizado: '{sanitized_job_name}'): {duration_seconds} segundos, Estado: {job['conclusion']}")
             
         except (KeyError, TypeError) as e:
-            print(f"Error al procesar el job '{job.get('name', 'N/A')}': Falta una clave o el tipo de dato es incorrecto. Error: {e}")
+            print(f"Error al procesar el job '{job.get('name', 'N/A')}': {e}")
 
 print("Proceso de registro de métricas en MLflow finalizado.")
