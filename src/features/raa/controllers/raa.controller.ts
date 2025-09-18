@@ -37,6 +37,33 @@ export class RaaController {
   constructor(private readonly raaService: RaaService) {}
 
   /**
+   * Health check del módulo RAA
+   */
+  @Get('health')
+  @ApiOperation({ 
+    summary: 'Health Check RAA',
+    description: 'Verifica que el módulo RAA esté funcionando correctamente'
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Módulo RAA funcionando correctamente',
+    schema: {
+      example: {
+        status: 'ok',
+        module: 'RAA',
+        timestamp: '2025-09-18T00:00:00.000Z'
+      }
+    }
+  })
+  healthCheck() {
+    return {
+      status: 'ok',
+      module: 'RAA',
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  /**
    * Eliminar un RAA específico por ID
    */
   @Delete(':id')
