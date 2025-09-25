@@ -41,6 +41,30 @@ jobs:
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
 
+  risk-analysis:
+    runs-on: ubuntu-latest
+    env:
+      GH_PAT: ${{ secrets.GH_PAT }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      OWNER: ${{ secrets.OWNER }}
+      REPO: ${{ secrets.REPO }}
+      SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+      MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run risk analysis
+        run: python scripts/risk_pipeline.py
+
   deploy:
     name: Deploy to Railway
     # El despliegue seguirá dependiendo del éxito del job de CI,
@@ -59,28 +83,3 @@ jobs:
         uses: actions/checkout@v3
       - name: Deploy to Railway
         run: railway up --service=${{ env.SVC_ID }}
-  mlflow-tracking:
-    name: Log Metrics to MLflow
-    needs: [ci, deploy]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Setup Python
-        uses: actions/setup-python@v3
-        with:
-          python-version: '3.x'
-
-      - name: Install Dependencies
-        run: pip install requests mlflow
-
-      - name: Execute MLflow Tracking Script
-        run: python scripts/extract_metrics.py
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Pasa el secreto con la URL de tu servidor de MLflow
-          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          GITHUB_SHA: ${{ github.sha }}
