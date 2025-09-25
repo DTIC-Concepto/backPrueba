@@ -7,6 +7,8 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.dummy import DummyClassifier
 import mlflow
 import mlflow.sklearn
+import smtplib
+from email.message import EmailMessage
 
 # -----------------------------
 # Configuración MLflow
@@ -48,10 +50,38 @@ def get_sonar_metrics():
     return {}
 
 def get_github_loc(commit_sha):
-    r = requests.get(f"https://api.github.com/repos/{OWNER}/{REPO}/commits/{commit_sha}", headers=headers)
+    r = requests.get(f"https://api.github.com/repos/{OWNER}/{REPO}/commits/{sha}", headers=headers)
     if r.status_code == 200:
         return r.json()["stats"]["total"]
     return 0
+
+# -----------------------------
+# Función para enviar correo
+# -----------------------------
+def send_email_with_artifacts(to_email, subject, body, attachments):
+    smtp_server = "smtp.gmail.com"   # Cambia si usas otro proveedor
+    smtp_port = 587
+    sender_email = os.getenv("EMAIL_USER")       # correo remitente
+    sender_password = os.getenv("EMAIL_PASS")    # password de app
+
+    msg = EmailMessage()
+    msg["From"] = sender_email
+    msg["To"] = to_email
+    msg["Subject"] = subject
+    msg.set_content(body)
+
+    for file_path in attachments:
+        with open(file_path, "rb") as f:
+            file_data = f.read()
+            file_name = os.path.basename(file_path)
+        msg.add_attachment(file_data, maintype="application", subtype="octet-stream", filename=file_name)
+
+    with smtplib.SMTP(smtp_server, smtp_port) as server:
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.send_message(msg)
+
+    print(f"📧 Correo enviado a {to_email} con {len(attachments)} archivos.")
 
 # -----------------------------
 # Pipeline principal
@@ -64,16 +94,14 @@ def main():
 
     latest_commit = commits[0]
 
-    # Construir dataset
     records = []
-    sonar_metrics = get_sonar_metrics()  # métricas globales
+    sonar_metrics = get_sonar_metrics()
     for sha in commits:
         loc = get_github_loc(sha)
         record = {**sonar_metrics, "loc_changed": loc, "commit": sha}
         records.append(record)
     df = pd.DataFrame(records)
 
-    # Normalización y puntaje de riesgo
     metrics = ["bugs", "complexity", "code_smells", "vulnerabilities", "loc_changed"]
     scaler = MinMaxScaler()
     df_scaled = df.copy()
@@ -81,19 +109,16 @@ def main():
     df_scaled["risk_score"] = df_scaled[metrics].sum(axis=1)
     df_scaled = df_scaled.sort_values("risk_score", ascending=False)
 
-    # Etiqueta dummy: 1 = alto riesgo, 0 = aceptable
     df_scaled["risk_label"] = (df_scaled["risk_score"] > 2.5).astype(int)
 
-    X = df_scaled[metrics]
+    X = df_scaled[metrics].astype(float)
     y = df_scaled["risk_label"]
 
-    # Modelo dummy (siempre predice la clase más frecuente)
     clf = DummyClassifier(strategy="most_frequent")
     clf.fit(X, y)
 
-    input_example = X.iloc[:1]
+    input_example = X.iloc[:1].astype(float)
 
-    # Registrar en MLflow
     with mlflow.start_run():
         mlflow.log_param("num_commits", len(df))
         latest_risk = df_scaled.loc[df_scaled["commit"] == latest_commit, "risk_score"].values[0]
@@ -105,11 +130,9 @@ def main():
             input_example=input_example
         )
 
-        # Guardar artifacts adicionales
         df_scaled.to_csv("risk_scores.csv", index=False)
         mlflow.log_artifact("risk_scores.csv", artifact_path="data")
 
-    # Gráfico comparativo
     plt.figure(figsize=(10, 6))
     colors = ["red" if c == latest_commit else "steelblue" for c in df_scaled["commit"]]
     plt.barh(df_scaled["commit"], df_scaled["risk_score"], color=colors)
@@ -125,7 +148,13 @@ def main():
 
     print(f"✅ Pipeline completado. Puntaje último commit ({latest_commit[:7]}): {latest_risk:.2f}")
 
-    # Control de riesgo → cortar pipeline si es alto
+    send_email_with_artifacts(
+        to_email="erik.gaibor@epn.edu.ec",
+        subject=f"Reporte de riesgo commit {latest_commit[:7]}",
+        body=f"Puntaje de riesgo: {latest_risk:.2f}\nAdjunto CSV y gráfico del pipeline.",
+        attachments=["risk_scores.csv", "commit_risk_report.png"]
+    )
+
     if latest_risk > 2.5:
         print("❌ Riesgo muy alto, no se permite el despliegue.")
         sys.exit(1)
