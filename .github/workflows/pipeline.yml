@@ -71,7 +71,7 @@ jobs:
     # por lo que las pruebas y el análisis de código deben ser exitosos.
     # Si quieres que el deploy ocurra incluso si las pruebas fallan,
     # necesitas cambiar la condición.
-    needs: ci
+    needs: risk-analysis
     runs-on: ubuntu-latest
     if: success()
     container: ghcr.io/railwayapp/cli:latest
