@@ -22,8 +22,8 @@ mlflow.set_experiment("Deployment Risk Prediction")
 # -----------------------------
 GH_PAT = os.getenv("GH_PAT")
 SONAR_TOKEN = os.getenv("SONAR_TOKEN")
-OWNER = os.getenv("OWNER")             # ejemplo: "DTIC-Concepto"
-REPO = os.getenv("REPO")               # ejemplo: "backPrueba"
+OWNER = os.getenv("OWNER")
+REPO = os.getenv("REPO")
 SONAR_PROJECT_KEY = os.getenv("SONAR_PROJECT_KEY")
 
 headers = {"Authorization": f"Bearer {GH_PAT}"}
@@ -59,10 +59,10 @@ def get_github_loc(commit_sha):
 # Función para enviar correo
 # -----------------------------
 def send_email_with_artifacts(to_email, subject, body, attachments):
-    smtp_server = "smtp.gmail.com"   # Cambia si usas otro proveedor
+    smtp_server = "smtp.gmail.com"
     smtp_port = 587
-    sender_email = os.getenv("EMAIL_USER")       # correo remitente
-    sender_password = os.getenv("EMAIL_PASS")    # password de app
+    sender_email = os.getenv("EMAIL_USER")
+    sender_password = os.getenv("EMAIL_PASS")
 
     msg = EmailMessage()
     msg["From"] = sender_email
@@ -111,13 +111,14 @@ def main():
 
     df_scaled["risk_label"] = (df_scaled["risk_score"] > 2.5).astype(int)
 
-    X = df_scaled[metrics].astype(float)
+    # ➡ Convertir explícitamente a float64 para evitar warning MLflow
+    X = df_scaled[metrics].astype("float64")
     y = df_scaled["risk_label"]
 
     clf = DummyClassifier(strategy="most_frequent")
     clf.fit(X, y)
 
-    input_example = X.iloc[:1].astype(float)
+    input_example = X.iloc[:1].astype("float64")  # Ejemplo de entrada para MLflow
 
     with mlflow.start_run():
         mlflow.log_param("num_commits", len(df))
@@ -161,7 +162,6 @@ def main():
     else:
         print("✅ Riesgo aceptable, se permite el despliegue.")
         sys.exit(0)
-
 
 if __name__ == "__main__":
     main()
