@@ -50,7 +50,7 @@ def get_sonar_metrics():
     return {}
 
 def get_github_loc(commit_sha):
-    r = requests.get(f"https://api.github.com/repos/{OWNER}/{REPO}/commits/{sha}", headers=headers)
+    r = requests.get(f"https://api.github.com/repos/{OWNER}/{REPO}/commits/{commit_sha}", headers=headers)
     if r.status_code == 200:
         return r.json()["stats"]["total"]
     return 0
