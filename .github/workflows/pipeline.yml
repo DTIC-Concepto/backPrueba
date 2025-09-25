@@ -46,6 +46,8 @@ jobs:
     runs-on: ubuntu-latest
     if: success()
     env:
+      EMAIL_USER: ${{ secrets.EMAIL_USER }}
+      EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
       GH_PAT: ${{ secrets.GH_PAT }}
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       OWNER: ${{ secrets.OWNER }}
