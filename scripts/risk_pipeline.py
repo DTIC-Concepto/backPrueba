@@ -4,6 +4,7 @@ import requests
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.dummy import DummyClassifier
 import mlflow
 import mlflow.sklearn
 
@@ -80,16 +81,33 @@ def main():
     df_scaled["risk_score"] = df_scaled[metrics].sum(axis=1)
     df_scaled = df_scaled.sort_values("risk_score", ascending=False)
 
-    # Registrar métricas y modelo en MLflow
+    # Etiqueta dummy: 1 = alto riesgo, 0 = aceptable
+    df_scaled["risk_label"] = (df_scaled["risk_score"] > 2.5).astype(int)
+
+    X = df_scaled[metrics]
+    y = df_scaled["risk_label"]
+
+    # Modelo dummy (siempre predice la clase más frecuente)
+    clf = DummyClassifier(strategy="most_frequent")
+    clf.fit(X, y)
+
+    input_example = X.iloc[:1]
+
+    # Registrar en MLflow
     with mlflow.start_run():
         mlflow.log_param("num_commits", len(df))
         latest_risk = df_scaled.loc[df_scaled["commit"] == latest_commit, "risk_score"].values[0]
         mlflow.log_metric("latest_risk_score", latest_risk)
+
         mlflow.sklearn.log_model(
-            df_scaled[metrics],
-            artifact_path="risk_model",
-            registered_model_name="RiskCommitModel"
+            sk_model=clf,
+            name="RiskCommitModel",
+            input_example=input_example
         )
+
+        # Guardar artifacts adicionales
+        df_scaled.to_csv("risk_scores.csv", index=False)
+        mlflow.log_artifact("risk_scores.csv", artifact_path="data")
 
     # Gráfico comparativo
     plt.figure(figsize=(10, 6))
@@ -102,9 +120,10 @@ def main():
     plt.tight_layout()
     graph_path = "commit_risk_report.png"
     plt.savefig(graph_path)
+    mlflow.log_artifact(graph_path, artifact_path="figures")
     plt.show()
 
-    print(f"✅ Pipeline completado. Gráfico generado. Puntaje último commit ({latest_commit[:7]}): {latest_risk:.2f}")
+    print(f"✅ Pipeline completado. Puntaje último commit ({latest_commit[:7]}): {latest_risk:.2f}")
 
     # Control de riesgo → cortar pipeline si es alto
     if latest_risk > 2.5:
