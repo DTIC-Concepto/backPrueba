@@ -42,7 +42,9 @@ jobs:
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
 
   risk-analysis:
+    needs: ci
     runs-on: ubuntu-latest
+    if: success()
     env:
       GH_PAT: ${{ secrets.GH_PAT }}
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
