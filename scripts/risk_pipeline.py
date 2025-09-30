@@ -9,6 +9,9 @@ import mlflow
 import mlflow.sklearn
 import smtplib
 from email.message import EmailMessage
+import nltk
+from nltk.corpus import stopwords
+
 
 # -----------------------------
 # Configuración MLflow
@@ -35,7 +38,8 @@ def get_latest_commits(limit=11):
     url = f"https://api.github.com/repos/{OWNER}/{REPO}/commits"
     r = requests.get(url, headers=headers, params={"per_page": limit})
     if r.status_code == 200:
-        return [c["sha"] for c in r.json()]
+        # Devolver lista de diccionarios con sha y mensaje
+        return [{"sha": c["sha"], "message": c["commit"]["message"].split("\n")[0]} for c in r.json()]
     return []
 
 def get_sonar_metrics():
@@ -49,11 +53,34 @@ def get_sonar_metrics():
         return {m["metric"]: float(m["value"]) for m in measures}
     return {}
 
-def get_github_loc(commit_sha):
+def get_github_commit_stats(commit_sha):
+    """Devuelve total loc cambiadas, additions y deletions."""
     r = requests.get(f"https://api.github.com/repos/{OWNER}/{REPO}/commits/{commit_sha}", headers=headers)
     if r.status_code == 200:
-        return r.json()["stats"]["total"]
-    return 0
+        stats = r.json()["stats"]
+        return stats["total"], stats["additions"], stats["deletions"]
+    return 0, 0, 0
+def detect_commit_type(message):
+    """
+    Detecta si un commit es: bugfix, feature o refactor.
+    Basado en palabras clave simples.
+    """
+    message = message.lower()
+    stop_words = set(stopwords.words("english"))
+    words = [w for w in message.split() if w not in stop_words]
+
+    bugfix_keywords = {"fix", "bug", "error", "issue", "patch", "correct"}
+    feature_keywords = {"add", "feature", "implement", "create", "new"}
+    refactor_keywords = {"refactor", "cleanup", "restructure", "optimize"}
+
+    if any(word in bugfix_keywords for word in words):
+        return "bugfix"
+    elif any(word in feature_keywords for word in words):
+        return "feature"
+    elif any(word in refactor_keywords for word in words):
+        return "refactor"
+    else:
+        return "other"
 
 # -----------------------------
 # Función para enviar correo
@@ -92,13 +119,22 @@ def main():
         print("❌ No se pudieron obtener commits.")
         sys.exit(1)
 
-    latest_commit = commits[0]
+    latest_commit = commits[0]  # dict con sha y message
 
     records = []
     sonar_metrics = get_sonar_metrics()
-    for sha in commits:
-        loc = get_github_loc(sha)
-        record = {**sonar_metrics, "loc_changed": loc, "commit": sha}
+    # -----------------------------
+    for c in commits:
+        sha, message = c["sha"], c["message"]
+        total_loc, additions, deletions = get_github_commit_stats(sha)
+        commit_type = detect_commit_type(message)  # <-- NLP aquí
+        record = {**sonar_metrics, 
+                "loc_changed": total_loc, 
+                "additions": additions, 
+                "deletions": deletions, 
+                "commit": sha,
+                "message": message,
+                "commit_type": commit_type}  # <-- guardamos tipo
         records.append(record)
     df = pd.DataFrame(records)
 
@@ -111,6 +147,8 @@ def main():
 
     df_scaled["risk_label"] = (df_scaled["risk_score"] > 2.5).astype(int)
 
+    df_scaled[metrics] = df_scaled[metrics].astype("float64")
+
     # ➡ Convertir explícitamente a float64 para evitar warning MLflow
     X = df_scaled[metrics].astype("float64")
     y = df_scaled["risk_label"]
@@ -119,10 +157,11 @@ def main():
     clf.fit(X, y)
 
     input_example = X.iloc[:1].astype("float64")  # Ejemplo de entrada para MLflow
-
+    if mlflow.active_run():
+        mlflow.end_run()
     with mlflow.start_run():
         mlflow.log_param("num_commits", len(df))
-        latest_risk = df_scaled.loc[df_scaled["commit"] == latest_commit, "risk_score"].values[0]
+        latest_risk = df_scaled.loc[df_scaled["commit"] == latest_commit["sha"], "risk_score"].values[0]
         mlflow.log_metric("latest_risk_score", latest_risk)
 
         mlflow.sklearn.log_model(
@@ -133,12 +172,15 @@ def main():
 
         df_scaled.to_csv("risk_scores.csv", index=False)
         mlflow.log_artifact("risk_scores.csv", artifact_path="data")
-
+    mlflow.end_run()
+    # -----------------------------
+    # Gráfico de riesgo de commits
+    # -----------------------------
     plt.figure(figsize=(10, 6))
-    colors = ["red" if c == latest_commit else "steelblue" for c in df_scaled["commit"]]
-    plt.barh(df_scaled["commit"], df_scaled["risk_score"], color=colors)
+    colors = ["red" if c == latest_commit["sha"] else "steelblue" for c in df_scaled["commit"]]
+    plt.barh(df_scaled["message"], df_scaled["risk_score"], color=colors)
     plt.xlabel("Puntaje de riesgo (normalizado)")
-    plt.ylabel("Commit")
+    plt.ylabel("Commit Message")
     plt.title("Riesgo del commit más reciente comparado con los últimos 10")
     plt.gca().invert_yaxis()
     plt.tight_layout()
@@ -147,15 +189,69 @@ def main():
     mlflow.log_artifact(graph_path, artifact_path="figures")
     plt.show()
 
-    print(f"✅ Pipeline completado. Puntaje último commit ({latest_commit[:7]}): {latest_risk:.2f}")
+    # -----------------------------
+    # Reporte acumulado de deuda técnica
+    # -----------------------------
+    df_scaled["deuda_tecnica"] = df_scaled["code_smells"] + df_scaled["complexity"]
+    df_scaled["deuda_acumulada"] = df_scaled["deuda_tecnica"].cumsum()
 
+    plt.figure(figsize=(10, 6))
+    plt.plot(df_scaled["message"], df_scaled["deuda_acumulada"], marker="o", linestyle="-", color="darkorange")
+    plt.xticks(rotation=45, ha="right")
+    plt.xlabel("Commit Message")
+    plt.ylabel("Deuda técnica acumulada")
+    plt.title("Evolución acumulada de la deuda técnica (Code Smells + Complejidad)")
+    plt.tight_layout()
+    debt_path = "technical_debt_report.png"
+    plt.savefig(debt_path)
+    mlflow.log_artifact(debt_path, artifact_path="figures")
+    plt.show()
+
+    # -----------------------------
+    # Reporte de líneas añadidas vs eliminadas
+    # -----------------------------
+    plt.figure(figsize=(10, 6))
+    plt.bar(df["message"], df["additions"], color="green", label="Additions")
+    plt.bar(df["message"], -df["deletions"], color="red", label="Deletions")
+    plt.xticks(rotation=45, ha="right")
+    plt.xlabel("Commit Message")
+    plt.ylabel("Líneas (+ / -)")
+    plt.title("Líneas añadidas vs eliminadas por commit")
+    plt.legend()
+    plt.tight_layout()
+    changes_path = "additions_deletions_report.png"
+    plt.savefig(changes_path)
+    mlflow.log_artifact(changes_path, artifact_path="figures")
+    plt.show()
+
+    print(f"✅ Pipeline completado. Puntaje último commit ({latest_commit['message'][:50]}...): {latest_risk:.2f}")
+
+
+     # -----------------------------
+    # Reporte de Tipo de Commit
+    # -----------------------------
+    commit_type_counts = df_scaled["commit_type"].value_counts()
+
+    plt.figure(figsize=(8, 5))
+    commit_type_counts.plot(kind="bar", color=["red", "green", "blue", "gray"])
+    plt.xlabel("Tipo de commit")
+    plt.ylabel("Cantidad de commits")
+    plt.title("Cantidad de commits por tipo (NLP)")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig("commit_type_count.png")
+    plt.show()
+
+    # -----------------------------
+    # Enviar correo con todos los reportes
+    # -----------------------------
     send_email_with_artifacts(
         to_email="erik.gaibor@epn.edu.ec",
-        subject=f"Reporte de riesgo commit {latest_commit[:7]}",
-        body=f"Puntaje de riesgo: {latest_risk:.2f}\nAdjunto CSV y gráfico del pipeline.",
-        attachments=["risk_scores.csv", "commit_risk_report.png"]
+        subject=f"Reporte de riesgo commit {latest_commit['message'][:50]}...",
+        body=f"Puntaje de riesgo: {latest_risk:.2f}\nAdjunto CSV, gráfico de riesgo, reporte de deuda técnica y cambios de líneas.",
+        attachments=["risk_scores.csv", "commit_risk_report.png", "technical_debt_report.png", "additions_deletions_report.png"]
     )
-
+    
     if latest_risk > 2.5:
         print("❌ Riesgo muy alto, no se permite el despliegue.")
         sys.exit(1)
