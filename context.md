@@ -61,38 +61,10 @@ Poliacredita es un sistema de gestión académica para la Escuela Politécnica N
 - Alineación con estándares (RA ↔ EURACE/OPP)
 - Generación de matrices de verificación de acreditación
 
-## Reglas Técnicas y Arquitectura
 
-### Stack Tecnológico
-- **Framework**: NestJS (TypeScript)
-- **Base de Datos**: PostgreSQL
-- **ORM**: Sequelize (@nestjs/sequelize)
 
-### Conexión Global (app.module.ts)
-```typescript
-SequelizeModule.forRoot({
-  dialect: 'postgres',
-  host: process.env.DB_HOST,
-  port: +process.env.DB_PORT,
-  username: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME,
-  autoLoadModels: true,
-  synchronize: true,
-})
-```
-
-### Módulos por Feature
-
-Cada HU = un único módulo con carpeta `src/features/<feature-kebab>/`
-
-#### Estructura Interna:
-- `<feature>.module.ts`
-- `controllers/<feature>.controller.ts`
-- `services/<feature>.service.ts`
-- `models/<entity>.model.ts` (con @Table, @Column, @ForeignKey, @BelongsTo, etc.)
-- `dtos/CreateXxxDto.ts`, `UpdateXxxDto.ts`, `FilterXxxDto.ts`
-- `index.ts` (barrel file)
+## Guia
+- Crear modulo para cada ENTIDAD encontrada y dentro de ese modulo poner el servicio, controlador, etc
 
 ### Convenciones
 
@@ -104,25 +76,17 @@ Cada HU = un único módulo con carpeta `src/features/<feature-kebab>/`
 
 ## Características Importantes
 
-- Códigos auto-generados en RA y OPP
+- Códigos auto-generados 
 - Validaciones de negocio en entidades y relaciones
 - Soft deletes en Asignaturas
 - Índices únicos en tablas many-to-many
 - Contraseñas encriptadas automáticamente
 - Timestamps automáticos para auditoría
 
-## Guía de Uso
-
-Cuando se entregue una HU con tareas [BE]:
-
-1. Generar un único módulo con la estructura descrita
-2. Mapear cada tarea [BE] a un endpoint REST y un método en el service
-3. Crear/ajustar modelos Sequelize necesarios (y relaciones)
-4. Crear/ajustar DTOs con validaciones
-5. Entregar: árbol de archivos del feature, controller con endpoints, service con firmas, modelos y DTOs
 
 ## Restricciones
 
 - **NO** crear múltiples módulos/servicios por cada tarea
 - Persistencia obligatoria en PostgreSQL usando Sequelize
 - Si algo no es claro, generar la versión mínima viable y documentar con TODO
+

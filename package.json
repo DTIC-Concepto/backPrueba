@@ -25,18 +25,28 @@
     "docker:dev": "docker-compose -f docker-compose.dev.yml up -d",
     "docker:dev:down": "docker-compose -f docker-compose.dev.yml down",
     "docker:dev:logs": "docker-compose -f docker-compose.dev.yml logs -f",
-    "docker:clean": "docker-compose down -v --remove-orphans"
+    "docker:clean": "docker-compose down -v --remove-orphans",
+    "seed:admin": "ts-node -r tsconfig-paths/register scripts/seed-admin.ts",
+    "seed:facultades": "ts-node -r tsconfig-paths/register scripts/seed-facultades.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/mapped-types": "^2.1.0",
+    "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/sequelize": "^11.0.0",
     "@nestjs/swagger": "^11.2.0",
+    "@types/bcrypt": "^6.0.0",
+    "@types/passport-jwt": "^4.0.1",
     "@types/pg": "^8.15.5",
+    "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
     "pg": "^8.16.3",
     "pg-hstore": "^2.3.4",
     "reflect-metadata": "^0.2.2",
@@ -44,7 +54,6 @@
     "sequelize": "^6.37.7",
     "sequelize-typescript": "^2.1.6",
     "swagger-ui-express": "^5.0.1"
-
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

@@ -1,0 +1,190 @@
+@startuml HU5091-Dashboard-Activity-Sequence-Diagram
+!theme plain
+title Diagrama de Secuencia - HU5091: Dashboard de Actividad Reciente (Filtrado por Rol)
+
+actor Usuario as U
+participant "Frontend" as F
+participant "DashboardController" as DC
+participant "JwtAuthGuard" as JAG
+participant "DashboardService" as DS
+participant "AuditoriaEventoModel" as AEM
+participant "UsuarioModel" as UM
+database "Base de Datos" as DB
+
+== Flujo de Consulta de Actividad Reciente ==
+
+U -> F: Accede al dashboard
+activate F
+note right: Usuario autenticado\nquiere ver actividad reciente
+
+F -> F: Preparar request con JWT token
+note right: Token incluido en Authorization header
+
+F -> DC: GET /dashboard/activity?limit=10
+activate DC
+
+== Validación de Autenticación ==
+
+DC -> JAG: Validar JWT token
+activate JAG
+
+JAG -> JAG: Verificar token JWT
+note right: Validar firma y expiración
+
+alt Token válido
+    JAG -> UM: findOne(userId)
+    activate UM
+    
+    UM -> DB: SELECT usuario WHERE id = ?
+    activate DB
+    DB --> UM: Usuario encontrado
+    deactivate DB
+    
+    UM --> JAG: Usuario válido y activo
+    deactivate UM
+    
+    JAG --> DC: Usuario autenticado
+    deactivate JAG
+    
+    == Obtención de Actividad Reciente ==
+    
+    DC -> DS: getActividadReciente(usuario, queryDto)
+    activate DS
+    note right: queryDto = { limit: 10, offset: 0 }\nusuario = UsuarioModel completo
+    
+    DS -> DS: Determinar filtros por rol
+    note right: Si usuario.rol !== ADMINISTRADOR:\n  whereConditions.usuarioId = usuario.id\nSi es ADMINISTRADOR:\n  Sin filtros (ve todo)
+    
+    DS -> AEM: findAll(options)
+    activate AEM
+    note right: Consulta optimizada:\n- Include Usuario\n- Where conditions según rol\n- Order by createdAt DESC\n- Limit 10\n- Índices optimizados
+    
+    AEM -> DB: SELECT eventos WITH usuario\nWHERE (filtros según rol)\nORDER BY created_at DESC\nLIMIT 10
+    activate DB
+    note right: Consulta con filtros por rol:\n- Si ADMINISTRADOR: sin WHERE\n- Otros roles: WHERE usuarioId = X\n- Eager loading de usuario\n- Índices en created_at y usuario_id
+    
+    DB --> AEM: Lista de eventos con usuarios
+    deactivate DB
+    
+    AEM --> DS: AuditoriaEventoModel[]
+    deactivate AEM
+    
+    DS -> DS: Transformar a ActividadRecenteDto[]
+    note right: Para cada evento:\n- getTiempoRelativo() -> "Hace 5 min"\n- getDescripcionFormateada() -> "Creó nueva facultad 'FIEC'"\n- usuario.correo -> "admin@epn.edu.ec"
+    
+    DS --> DC: ActividadRecenteDto[]
+    deactivate DS
+    
+    DC --> F: 200 OK\n[ActividadRecenteDto]
+    deactivate DC
+    note right: Respuesta filtrada por rol:\n**Si ADMINISTRADOR:** todos los eventos\n**Si otros roles:** solo sus eventos\n\nEjemplo:\n[{\n  "hora": "Hace 5 min",\n  "usuario": "admin@epn.edu.ec",\n  "accion": "Creó nueva facultad 'FIEC'",\n  "tipoEvento": "FACULTAD_CREADA",\n  "fechaEvento": "2024-09-30T15:30:00Z"\n}]
+    
+    F -> F: Renderizar actividad en dashboard
+    note right: Mostrar tabla con:\n- Hora relativa\n- Usuario\n- Acción formateada
+    
+    F --> U: Dashboard con actividad reciente
+    deactivate F
+    
+== Casos de Filtrado por Rol ==
+
+note over U, DB
+**Comportamiento según el rol del usuario:**
+
+**ADMINISTRADOR:**
+- Ve TODA la actividad del sistema
+- Puede ver eventos de todos los usuarios
+- Sin filtros WHERE en la consulta
+- Estadísticas globales
+
+**OTROS ROLES (PROFESOR, DECANO, etc.):**
+- Solo ven SU PROPIA actividad
+- Filtro automático: WHERE usuarioId = usuario.id
+- Solo eventos propios en la respuesta
+- Estadísticas personales únicamente
+
+**Ejemplos:**
+- Admin logeado: 8 eventos (todos los usuarios)
+- Profesor logeado: 4 eventos (solo suyos)
+end note
+    
+else Token inválido
+    JAG --> DC: 401 Unauthorized
+    deactivate JAG
+    
+    DC --> F: 401 Unauthorized
+    deactivate DC
+    
+    F --> U: Redirigir a login
+    deactivate F
+end
+
+== Registro Automático de Eventos (Proceso Paralelo) ==
+
+note over U, DB
+**Proceso de Registro de Eventos de Auditoría:**
+Este proceso ocurre automáticamente cuando los usuarios realizan acciones
+end note
+
+participant "AuthService" as AS
+participant "AuditoriaService" as AudS
+
+U -> F: Realiza acción (ej: login exitoso)
+F -> AS: Acción que genera evento
+activate AS
+
+AS -> AS: Procesar acción principal
+note right: Ej: Autenticar usuario
+
+AS -> AudS: registrarLoginExitoso(userId, correo)
+activate AudS
+
+AudS -> AEM: create(evento)
+activate AEM
+
+AEM -> DB: INSERT INTO auditoria_eventos
+activate DB
+note right: Datos del evento:\n- usuarioId\n- tipoEvento: LOGIN_EXITOSO\n- descripción\n- metadatos: {correo}\n- timestamp actual
+
+DB --> AEM: Evento registrado
+deactivate DB
+
+AEM --> AudS: EventoModel creado
+deactivate AEM
+
+AudS --> AS: Registro completado (async)
+deactivate AudS
+note right: No bloquea flujo principal\nRegistro en background
+
+AS --> F: Respuesta de acción principal
+deactivate AS
+
+== Optimizaciones de Performance ==
+
+note over DS, DB
+**Optimizaciones implementadas:**
+
+1. **Índices de BD:**
+   - auditoria_eventos_created_at_idx
+   - auditoria_eventos_usuario_id_idx (crucial para filtrado)
+   - auditoria_eventos_tipo_idx
+
+2. **Consulta optimizada con filtrado por rol:**
+   - WHERE usuarioId para roles no-admin (usa índice)
+   - Sin WHERE para administradores (acceso completo)
+   - LIMIT para reducir datos transferidos
+   - ORDER BY con índice en created_at
+   - Eager loading de usuario
+
+3. **Seguridad y privacidad:**
+   - Filtrado automático en base de datos
+   - No depende del frontend para seguridad
+   - Cada usuario ve solo su información (excepto admin)
+
+4. **Performance:**
+   - Índice en usuario_id optimiza filtros por rol
+   - Mapeo directo sin consultas adicionales
+   - Métodos helper en modelo
+   - Paginación configurable
+end note
+
+@enduml

@@ -1,0 +1,97 @@
+@startuml HU5092_Filtrar_Usuarios_Por_Rol
+!define AWSPUML https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v18.0/dist
+!includeurl AWSPUML/AWSCommon.puml
+!includeurl AWSPUML/ApplicationIntegration/APIGateway.puml
+!includeurl AWSPUML/Database/RDS.puml
+
+title HU5092: Filtrar Usuarios por Rol - Diagrama de Secuencia
+
+actor "Administrador" as Admin
+participant "Frontend\n(Browser)" as Frontend
+participant "UsuariosController" as Controller
+participant "JwtAuthGuard" as JwtGuard
+participant "RolesGuard" as RolesGuard
+participant "UsuariosService" as Service
+database "PostgreSQL\nDatabase" as DB
+
+== Autenticación y Autorización ==
+
+Admin -> Frontend: Accede a página de gestión de usuarios
+activate Frontend
+
+Frontend -> Controller: GET /usuarios?rol=PROFESOR
+note right: Query parameters:\n- rol: PROFESOR\n- estadoActivo: true (opcional)\n- search: texto (opcional)
+activate Controller
+
+Controller -> JwtGuard: Validar JWT token
+activate JwtGuard
+JwtGuard -> JwtGuard: Verificar token válido
+JwtGuard -> Controller: Token válido ✓
+deactivate JwtGuard
+
+Controller -> RolesGuard: Verificar rol de usuario
+activate RolesGuard
+RolesGuard -> RolesGuard: Validar rol = ADMINISTRADOR
+alt Rol no es ADMINISTRADOR
+    RolesGuard -> Controller: 403 Forbidden
+    Controller -> Frontend: Error 403: Acceso denegado
+    Frontend -> Admin: Mensaje: "No tienes permisos para acceder"
+    note right: Solo administradores pueden\nfiltrar usuarios por rol
+else Rol es ADMINISTRADOR ✓
+    RolesGuard -> Controller: Autorización exitosa
+    deactivate RolesGuard
+
+    == Filtrado por Rol ==
+
+    Controller -> Service: findAll(filterDto: FilterUsuarioDto)
+    note right: FilterUsuarioDto:\n- rol?: RolEnum.PROFESOR\n- estadoActivo?: boolean\n- search?: string
+    activate Service
+
+    Service -> Service: Construir whereClause con filtros
+    note right: whereClause = {\n  rol: 'PROFESOR',\n  estadoActivo: true,\n  [Op.or]: [...] // si hay search\n}
+
+    Service -> DB: SELECT * FROM usuarios\nWHERE rol = 'PROFESOR'\nAND estadoActivo = true\nORDER BY apellidos, nombres
+    activate DB
+
+    alt Usuarios encontrados con rol PROFESOR
+        DB -> Service: Array de usuarios con rol PROFESOR
+        deactivate DB
+        
+        Service -> Controller: UsuarioModel[] filtrados
+        deactivate Service
+
+        Controller -> Frontend: 200 OK + Lista de usuarios filtrada
+        note right: Respuesta:\n[\n  {\n    id: 1,\n    nombres: "Juan Carlos",\n    apellidos: "Pérez González",\n    rol: "PROFESOR",\n    estadoActivo: true\n  },\n  ...\n]
+
+    else No hay usuarios con rol PROFESOR
+        DB -> Service: Array vacío []
+        deactivate DB
+        
+        Service -> Controller: Array vacío []
+        deactivate Service
+
+        Controller -> Frontend: 200 OK + Array vacío []
+        note right: Respuesta: []
+    end
+
+    deactivate Controller
+
+    Frontend -> Admin: Muestra lista filtrada de usuarios
+    note right: - Solo usuarios con rol PROFESOR\n- Opción para cambiar filtro\n- Búsqueda adicional por texto
+
+end
+
+deactivate Frontend
+
+== Casos de Error ==
+
+note over Admin, DB
+**Casos de error manejados:**
+1. Token JWT inválido → 401 Unauthorized
+2. Usuario sin rol ADMINISTRADOR → 403 Forbidden  
+3. Parámetros de filtro inválidos → 400 Bad Request
+4. Rol no existe en enum → Validación DTO falla
+5. Error de conexión DB → 500 Internal Server Error
+end note
+
+@enduml

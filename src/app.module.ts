@@ -3,7 +3,18 @@ import { SequelizeModule } from '@nestjs/sequelize';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { RaaModule } from './features/raa/raa.module';
+
+// Módulos de la aplicación
+import { UsuariosModule } from './usuarios/usuarios.module';
+import { AuthModule } from './auth/auth.module';
+import { FacultadesModule } from './facultades/facultades.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { AuditoriaModule } from './auditoria/auditoria.module';
+
+// Modelos
+import { UsuarioModel } from './usuarios/models/usuario.model';
+import { FacultadModel } from './facultades/models/facultad.model';
+import { AuditoriaEventoModel } from './auditoria/models/auditoria-evento.model';
 
 @Module({
   imports: [
@@ -17,10 +28,16 @@ import { RaaModule } from './features/raa/raa.module';
       username: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASS || 'postgres',
       database: process.env.DB_NAME || 'poliacredita_db',
+      models: [UsuarioModel, FacultadModel, AuditoriaEventoModel],
       autoLoadModels: true,
       synchronize: true, // Solo para desarrollo
     }),
-    RaaModule,
+    // Módulos de funcionalidad
+    UsuariosModule,
+    AuthModule,
+    FacultadesModule,
+    DashboardModule,
+    AuditoriaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,0 +1,137 @@
+@startuml HU5090-Listar-Usuarios-Sequence-Diagram
+!theme plain
+title Diagrama de Secuencia - HU5090: Listar Usuarios (Solo Administradores)
+
+actor Administrador as A
+participant "Frontend" as F
+participant "UsuariosController" as UC
+participant "JwtAuthGuard" as JAG
+participant "RolesGuard" as RG
+participant "UsuariosService" as US
+participant "UsuarioModel" as UM
+database "Base de Datos" as DB
+
+== Flujo de Listado de Usuarios con Protección de Rol ==
+
+A -> F: Solicita lista de usuarios
+activate F
+note right: Administrador autenticado\nquiere ver lista de usuarios
+
+F -> F: Preparar request con JWT token
+note right: Token obtenido previamente\nen el login
+
+F -> UC: GET /usuarios\nAuthorization: Bearer <token>
+activate UC
+
+== Validación de Autenticación ==
+
+UC -> JAG: Validar JWT token
+activate JAG
+
+JAG -> JAG: Extraer token del header
+note right: Authorization: Bearer <token>
+
+JAG -> JAG: Verificar firma JWT
+note right: Validar con JWT_SECRET
+
+alt Token válido
+    JAG -> US: Obtener usuario del token
+    activate US
+    note right: Payload contiene user.id
+    
+    US -> UM: findOne(userId)
+    activate UM
+    
+    UM -> DB: SELECT usuario WHERE id = ?
+    activate DB
+    DB --> UM: Usuario encontrado
+    deactivate DB
+    
+    UM --> US: UsuarioModel
+    deactivate UM
+    
+    US --> JAG: Usuario válido y activo
+    deactivate US
+    
+    JAG --> UC: Usuario autenticado
+    deactivate JAG
+    
+    == Validación de Rol ==
+    
+    UC -> RG: Validar rol ADMINISTRADOR
+    activate RG
+    
+    RG -> RG: Verificar @Roles(ADMINISTRADOR)
+    note right: Decorador requiere\nrol ADMINISTRADOR
+    
+    RG -> RG: Comparar user.rol con requerido
+    note right: user.rol === 'ADMINISTRADOR'
+    
+    alt Usuario es ADMINISTRADOR
+        RG --> UC: Autorización concedida
+        deactivate RG
+        
+        == Obtención de Lista de Usuarios ==
+        
+        UC -> US: findAll(filterDto?)
+        activate US
+        note right: Filtros opcionales:\n- rol\n- estadoActivo\n- search
+        
+        US -> UM: findAll(whereClause)
+        activate UM
+        
+        UM -> DB: SELECT usuarios WHERE conditions\nORDER BY apellidos, nombres
+        activate DB
+        note right: Consulta con filtros aplicados\ny ordenamiento alfabético
+        
+        DB --> UM: Lista de usuarios
+        deactivate DB
+        
+        UM --> US: UsuarioModel[]
+        deactivate UM
+        note right: toJSON() automáticamente\nexcluye contraseñas
+        
+        US --> UC: Lista de usuarios
+        deactivate US
+        
+        UC --> F: 200 OK\n[UsuarioListResponseDto]
+        deactivate UC
+        note right: Respuesta con:\n- id, nombres, apellidos\n- correo, rol, estadoActivo\n- createdAt, updatedAt
+        
+        F --> A: Lista de usuarios mostrada
+        deactivate F
+        
+    else Usuario NO es ADMINISTRADOR
+        RG --> UC: 403 Forbidden
+        deactivate RG
+        
+        UC --> F: 403 Forbidden\n"Insufficient permissions"
+        deactivate UC
+        
+        F --> A: Error: Sin permisos de administrador
+        deactivate F
+    end
+    
+else Token inválido o expirado
+    JAG --> UC: 401 Unauthorized
+    deactivate JAG
+    
+    UC --> F: 401 Unauthorized\n"Invalid token"
+    deactivate UC
+    
+    F --> A: Error: Token inválido, relogin requerido
+    deactivate F
+end
+
+== Casos de Error Adicionales ==
+
+note over F, DB
+**Posibles errores:**
+1. **Sin token**: 401 Unauthorized - "No token provided"
+2. **Token malformado**: 401 Unauthorized - "Invalid token format"
+3. **Usuario inactivo**: 401 Unauthorized - "User inactive"
+4. **Sin rol admin**: 403 Forbidden - "Insufficient permissions"
+5. **Error de BD**: 500 Internal Server Error
+end note
+
+@enduml

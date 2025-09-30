@@ -1,0 +1,115 @@
+@startuml HU5087-Login-Sequence-Diagram
+!theme plain
+title Diagrama de Secuencia - HU5087: Iniciar Sesión con Validación de Rol
+
+actor Usuario as U
+participant "Frontend" as F
+participant "AuthController" as AC
+participant "AuthService" as AS
+participant "UsuariosService" as US
+participant "UsuarioModel" as UM
+participant "JwtService" as JWT
+database "Base de Datos" as DB
+
+== Flujo de Autenticación ==
+
+U -> F: Ingresa credenciales\n(correo, contraseña, rol)
+activate F
+
+F -> F: Validar datos en frontend
+note right: Validación básica de formato
+
+F -> AC: POST /auth/login\n{correo, contraseña, rol}
+activate AC
+
+AC -> AC: Validar DTO (LoginDto)
+note right: - correo debe ser email válido\n- contraseña no vacía\n- rol debe ser enum válido
+
+alt Validación DTO exitosa
+    AC -> AS: login(loginDto)
+    activate AS
+    
+    AS -> US: findByEmail(correo)
+    activate US
+    
+    US -> DB: SELECT usuario WHERE correo = ?
+    activate DB
+    DB --> US: Usuario encontrado
+    deactivate DB
+    
+    US --> AS: UsuarioModel
+    deactivate US
+    
+    alt Usuario existe y está activo
+        AS -> UM: validatePassword(contraseña)
+        activate UM
+        
+        UM -> UM: bcrypt.compare(contraseña, hash)
+        note right: Comparación segura\ncon bcrypt
+        
+        UM --> AS: boolean (válida/inválida)
+        deactivate UM
+        
+        alt Contraseña válida
+            AS -> AS: Validar rol
+            note right: user.rol === loginDto.rol
+            
+            alt Rol coincide
+                AS -> JWT: sign(payload)
+                activate JWT
+                note right: payload = {\n  sub: user.id,\n  correo: user.correo,\n  rol: user.rol\n}
+                
+                JWT --> AS: access_token
+                deactivate JWT
+                
+                AS --> AC: AuthResponseDto\n{access_token, user}
+                deactivate AS
+                
+                AC --> F: 200 OK\n{access_token, user}
+                deactivate AC
+                
+                F --> U: Login exitoso\n+ token JWT
+                deactivate F
+                
+            else Rol no coincide
+                AS --> AC: UnauthorizedException\n"El rol seleccionado no corresponde al usuario"
+                deactivate AS
+                
+                AC --> F: 401 Unauthorized
+                deactivate AC
+                
+                F --> U: Error: Rol inválido
+                deactivate F
+            end
+            
+        else Contraseña inválida
+            AS --> AC: UnauthorizedException\n"Credenciales inválidas"
+            deactivate AS
+            
+            AC --> F: 401 Unauthorized
+            deactivate AC
+            
+            F --> U: Error: Credenciales incorrectas
+            deactivate F
+        end
+        
+    else Usuario no existe o inactivo
+        AS --> AC: UnauthorizedException\n"Credenciales inválidas"
+        deactivate AS
+        
+        AC --> F: 401 Unauthorized
+        deactivate AC
+        
+        F --> U: Error: Credenciales incorrectas
+        deactivate F
+    end
+    
+else Validación DTO falla
+    AC --> F: 400 Bad Request\n{validation errors}
+    deactivate AC
+    
+    F --> U: Error: Datos inválidos
+    deactivate F
+end
+
+@enduml
