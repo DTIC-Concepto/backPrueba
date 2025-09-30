@@ -2,6 +2,7 @@
 FROM node:18-alpine AS builder
 
 # Establecer el directorio de trabajo
+#test
 WORKDIR /app
 
 # Copiar archivos de configuración de dependencias
