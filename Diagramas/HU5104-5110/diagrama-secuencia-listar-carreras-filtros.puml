@@ -1,0 +1,108 @@
+@startuml HU5104-5110 - GET Carreras con Filtros Avanzados
+
+title HU5104-5110: Listar carreras con filtros avanzados y paginación
+
+actor "Administrador" as Admin
+participant "Frontend" as FE
+participant "JWT Guard" as JWT
+participant "Roles Guard" as RG
+participant "CarrerasController" as CC
+participant "CarrerasService" as CS
+participant "Sequelize ORM" as ORM
+database "PostgreSQL" as DB
+
+Admin -> FE: Accede a la lista de carreras
+activate FE
+
+FE -> FE: Configura filtros opcionales:\n- search (HU5105)\n- estadoActivo (HU5106)\n- facultadId (HU5110)\n- modalidad, duracion\n- page/limit (HU5109)
+
+Admin -> FE: Envía GET /carreras con filtros y paginación
+FE -> CC: GET /carreras?search=&estadoActivo=&facultadId=&modalidad=&duracionMin=&duracionMax=&page=&limit=
+activate CC
+
+CC -> JWT: Validar token JWT
+activate JWT
+JWT --> CC: Token válido
+deactivate JWT
+
+CC -> RG: Verificar rol ADMINISTRADOR
+activate RG
+RG --> CC: Rol autorizado
+deactivate RG
+
+CC -> CS: findAllForAdminPaginated(filterDto)
+activate CS
+
+== Construcción de Filtros Dinámicos ==
+
+CS -> CS: Construir whereClause:\n- HU5105: search (ILIKE en código/nombre)\n- HU5106: estadoActivo (boolean)\n- HU5110: facultadId (foreign key)\n- modalidad (ENUM)\n- duracion (rango min/max)
+
+CS -> CS: Calcular offset para paginación:\noffset = (page - 1) * limit
+
+== Consulta Principal con Paginación (HU5109) ==
+
+CS -> ORM: findAndCountAll({\nwhere: whereClause,\ninclude: [FacultadModel, UsuarioModel],\nlimit, offset\n})
+activate ORM
+ORM -> DB: SELECT carreras.*, facultades.*, usuarios.*\nFROM carreras\nLEFT JOIN facultades ON carreras.facultadId = facultades.id\nLEFT JOIN usuarios ON carreras.coordinadorId = usuarios.id\nWHERE [filtros aplicados]\nORDER BY nombre ASC\nLIMIT ? OFFSET ?
+activate DB
+DB --> ORM: Carreras con relaciones + total count
+deactivate DB
+ORM --> CS: {rows: CarreraModel[], count: total}
+deactivate ORM
+
+== Construcción de Respuesta Paginada ==
+
+CS -> CS: Calcular metadatos:\n- totalPages = ceil(total / limit)\n- hasNextPage = page < totalPages\n- hasPrevPage = page > 1
+
+CS -> CS: Transformar datos:\n- Mapear carreras con relaciones\n- Incluir información completa de:\n  * Facultad (id, código, nombre)\n  * Coordinador (id, nombres, apellidos, correo, rol)\n  * Nuevos campos (duracion, modalidad)
+
+CS -> CS: Construir respuesta:\n{\n  data: [...carreras],\n  pagination: {...metadatos},\n  filters: {...filtros aplicados}\n}
+
+CS --> CC: CarreraPaginatedResponseDto
+deactivate CS
+
+CC --> FE: 200 OK\n{\n  data: [...],\n  pagination: {...},\n  filters: {...}\n}
+deactivate CC
+
+FE -> FE: Renderizar tabla con:\n- Lista paginada de carreras\n- Información completa por carrera\n- Controles de paginación\n- Filtros aplicados visibles
+
+FE --> Admin: ✅ Lista de carreras filtrada y paginada
+
+deactivate FE
+
+note right of Admin
+  **Funcionalidades Implementadas:**
+  
+  **HU5104** - Listado básico:
+  ✅ Endpoint GET /carreras protegido
+  ✅ Solo accesible para ADMINISTRADOR
+  ✅ Información completa: código, nombre, facultad, coordinador
+  ✅ Incluye nuevos campos: duración, modalidad
+  
+  **HU5105** - Búsqueda por palabra clave:
+  ✅ Parámetro 'search' para código o nombre
+  ✅ Búsqueda case-insensitive (ILIKE)
+  ✅ Lista vacía si no hay coincidencias
+  
+  **HU5106** - Filtro por estado:
+  ✅ Parámetro 'estadoActivo' (true/false)
+  ✅ Filtra carreras activas/inactivas
+  ✅ Lista vacía si no hay coincidencias
+  
+  **HU5109** - Paginación:
+  ✅ Parámetros 'page' y 'limit'
+  ✅ Metadatos completos de paginación
+  ✅ Límite máximo de 50 elementos por página
+  ✅ Lista vacía si página no existe
+  
+  **HU5110** - Filtro por facultad:
+  ✅ Parámetro 'facultadId'
+  ✅ Filtra carreras por facultad específica
+  ✅ Lista vacía si no hay coincidencias
+  
+  **Filtros Adicionales:**
+  ✅ modalidad: PRESENCIAL/VIRTUAL
+  ✅ duracionMin/Max: rango de semestres
+end note
+
+@enduml

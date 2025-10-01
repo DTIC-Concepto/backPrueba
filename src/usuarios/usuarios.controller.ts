@@ -29,7 +29,9 @@ import { UsuariosService } from './usuarios.service';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 import { FilterUsuarioDto } from './dto/filter-usuario.dto';
+import { SearchUsuarioDto } from './dto/search-usuario.dto';
 import { UsuarioListResponseDto } from './dto/usuario-list-response.dto';
+import { UsuarioSearchResponseDto } from './dto/usuario-search-response.dto';
 import { UsuarioModel } from './models/usuario.model';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -46,16 +48,57 @@ export class UsuariosController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(RolesGuard)
+  @Roles(RolEnum.ADMINISTRADOR)
   @ApiOperation({
-    summary: 'Crear usuario',
-    description: 'Crea un nuevo usuario en el sistema',
+    summary: 'Registrar nuevo usuario (HU5102)',
+    description: 'Permite al administrador registrar un nuevo usuario en el sistema con validaciones de unicidad de cédula y email, asignación de roles y facultad. Solo accesible para usuarios con rol de Administrador.',
   })
   @ApiCreatedResponse({
-    description: 'Usuario creado exitosamente',
+    description: 'Usuario registrado exitosamente',
     type: UsuarioModel,
   })
   @ApiBadRequestResponse({
-    description: 'Datos inválidos o correo/cédula ya registrados',
+    description: 'Datos inválidos, correo/cédula ya registrados, o violación de restricciones de roles únicos por facultad',
+    type: ErrorResponseDto,
+    examples: {
+      duplicateEmail: {
+        summary: 'Email duplicado',
+        value: {
+          statusCode: 400,
+          message: 'Ya existe un usuario con este correo electrónico',
+          error: 'Bad Request',
+        },
+      },
+      duplicateCedula: {
+        summary: 'Cédula duplicada',
+        value: {
+          statusCode: 400,
+          message: 'Ya existe un usuario con esta cédula',
+          error: 'Bad Request',
+        },
+      },
+      uniqueRoleViolation: {
+        summary: 'Violación de rol único por facultad',
+        value: {
+          statusCode: 409,
+          message: 'Ya existe un usuario con el rol DECANO en esta facultad: Juan Pérez',
+          error: 'Conflict',
+        },
+      },
+      missingFaculty: {
+        summary: 'Falta facultad para rol específico',
+        value: {
+          statusCode: 400,
+          message: 'El rol DECANO requiere asignación a una facultad específica',
+          error: 'Bad Request',
+        },
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'No autorizado - Token JWT requerido',
+    type: ErrorResponseDto,
   })
   create(@Body() createUsuarioDto: CreateUsuarioDto) {
     return this.usuariosService.create(createUsuarioDto);
@@ -157,6 +200,94 @@ export class UsuariosController {
   })
   findAll(@Query() filterDto: FilterUsuarioDto): Promise<UsuarioModel[]> {
     return this.usuariosService.findAll(filterDto);
+  }
+
+  @Get('search')
+  @UseGuards(RolesGuard)
+  @Roles(RolEnum.ADMINISTRADOR)
+  @ApiOperation({
+    summary: 'Buscar usuarios para selección',
+    description: 'Permite a los administradores buscar usuarios que puedan ser seleccionados como Decano, Subdecano o Jefe de Departamento para una nueva facultad. Busca por nombres, apellidos o correo electrónico y filtra por rol específico.',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    description: 'Término de búsqueda para nombres, apellidos o correo electrónico',
+    example: 'Carlos Rodriguez',
+  })
+  @ApiQuery({
+    name: 'rol',
+    required: false,
+    description: 'Filtrar por rol específico (DECANO, SUBDECANO, JEFE_DEPARTAMENTO)',
+    enum: RolEnum,
+    example: RolEnum.DECANO,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de usuarios encontrados que coinciden con los criterios de búsqueda',
+    type: [UsuarioSearchResponseDto],
+    examples: {
+      decanosSearch: {
+        summary: 'Búsqueda de decanos (?rol=DECANO&search=Carlos)',
+        value: [
+          {
+            id: 7,
+            nombres: 'Carlos Eduardo',
+            apellidos: 'Rodríguez Silva',
+            correo: 'carlos.rodriguez@epn.edu.ec',
+            rol: 'DECANO',
+            estadoActivo: true,
+            nombreCompleto: 'Carlos Eduardo Rodríguez Silva'
+          }
+        ]
+      },
+      allRoles: {
+        summary: 'Búsqueda general (?search=María)',
+        value: [
+          {
+            id: 8,
+            nombres: 'María Elena',
+            apellidos: 'García López',
+            correo: 'maria.garcia@epn.edu.ec',
+            rol: 'DECANO',
+            estadoActivo: true,
+            nombreCompleto: 'María Elena García López'
+          }
+        ]
+      },
+      emptyResult: {
+        summary: 'Sin coincidencias (?search=NoExiste)',
+        value: []
+      }
+    }
+  })
+  @ApiUnauthorizedResponse({
+    description: 'No autorizado - Token inválido o usuario sin permisos de administrador',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 401 },
+        message: { type: 'string', example: 'Unauthorized' },
+        error: { type: 'string', example: 'Unauthorized' },
+      },
+    },
+  })
+  @ApiBadRequestResponse({
+    description: 'Parámetros de búsqueda inválidos',
+    type: ErrorResponseDto,
+  })
+  async searchUsuarios(@Query() searchDto: SearchUsuarioDto): Promise<UsuarioSearchResponseDto[]> {
+    const usuarios = await this.usuariosService.searchUsuarios(searchDto);
+    
+    return usuarios.map(usuario => ({
+      id: usuario.id,
+      nombres: usuario.nombres,
+      apellidos: usuario.apellidos,
+      correo: usuario.correo,
+      rol: usuario.rol,
+      estadoActivo: usuario.estadoActivo,
+      nombreCompleto: `${usuario.nombres} ${usuario.apellidos}`,
+    }));
   }
 
   @Get(':id')

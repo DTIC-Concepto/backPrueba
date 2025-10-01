@@ -1,0 +1,128 @@
+@startuml HU5094-5098 - GET Facultades con Filtros
+
+title HU5094-5098: Listar facultades con filtros avanzados y paginación
+
+actor "Administrador" as Admin
+participant "Frontend" as FE
+participant "JWT Guard" as JWT
+participant "Roles Guard" as RG
+participant "FacultadesController" as FC
+participant "FacultadesService" as FS
+participant "CarrerasService" as CS
+participant "UsuariosService" as US
+participant "Sequelize ORM" as ORM
+database "PostgreSQL" as DB
+
+Admin -> FE: Accede a la lista de facultades
+activate FE
+
+FE -> FE: Configura filtros opcionales:\n- search (HU5094)\n- estadoActivo (HU5096)\n- minCarreras/maxCarreras (HU5097)\n- page/limit (HU5098)
+
+Admin -> FE: Envía GET /facultades con filtros
+FE -> FC: GET /facultades?search=&estadoActivo=&minCarreras=&maxCarreras=&page=&limit=
+activate FC
+
+FC -> JWT: Validar token JWT
+activate JWT
+JWT --> FC: Token válido
+deactivate JWT
+
+FC -> RG: Verificar rol ADMINISTRADOR
+activate RG
+RG --> FC: Rol autorizado
+deactivate RG
+
+FC -> FS: findAllForAdminPaginated(filterDto)
+activate FS
+
+== Construcción de Filtros Dinámicos ==
+
+FS -> FS: Construir whereClause:\n- search: ILIKE en nombre/código\n- estadoActivo: boolean
+
+== Consulta Principal con Paginación ==
+
+FS -> ORM: findAndCountAll({\nwhere: whereClause,\ninclude: [CarreraModel],\noffset, limit\n})
+activate ORM
+ORM -> DB: SELECT facultades.*, COUNT(carreras.id)\nFROM facultades\nLEFT JOIN carreras ON facultades.id = carreras.facultadId\nWHERE [filtros]\nGROUP BY facultades.id\nORDER BY nombre\nLIMIT ? OFFSET ?
+activate DB
+DB --> ORM: Facultades con conteo
+deactivate DB
+ORM --> FS: {rows: FacultadModel[], count: total}
+deactivate ORM
+
+== Filtrado por Conteo de Carreras (HU5097) ==
+
+alt Filtros de carreras aplicados
+    loop Para cada facultad
+        FS -> CS: getCarrerasCountByFacultad(facultadId)
+        activate CS
+        CS -> ORM: count({where: {facultadId, estadoActivo: true}})
+        activate ORM
+        ORM -> DB: SELECT COUNT(*) FROM carreras WHERE facultadId = ? AND estadoActivo = true
+        activate DB
+        DB --> ORM: Conteo de carreras
+        deactivate DB
+        ORM --> CS: número de carreras
+        deactivate ORM
+        CS --> FS: carrerasCount
+        deactivate CS
+        
+        FS -> FS: Aplicar filtros minCarreras/maxCarreras
+    end
+    FS -> FS: Filtrar facultades por conteo de carreras
+end
+
+== Obtención de Decanos ==
+
+loop Para cada facultad
+    FS -> FS: findDecanoByFacultadId(facultadId)
+    FS -> ORM: findOne({where: {rol: DECANO, facultadId, estadoActivo: true}})
+    activate ORM
+    ORM -> DB: SELECT id, nombres, apellidos, correo\nFROM usuarios\nWHERE rol = 'DECANO' AND facultadId = ? AND estadoActivo = true
+    activate DB
+    DB --> ORM: Decano o null
+    deactivate DB
+    ORM --> FS: Información del decano
+    deactivate ORM
+end
+
+== Construcción de Respuesta Paginada ==
+
+FS -> FS: Construir respuesta:\n- data: facultades transformadas\n- pagination: {page, limit, total, totalPages}\n- filters: filtros aplicados
+
+FS --> FC: FacultadListResponseDto con paginación
+deactivate FS
+
+FC --> FE: 200 OK\n{\n  data: [...facultades],\n  pagination: {...},\n  filters: {...}\n}
+deactivate FC
+
+FE -> FE: Renderizar tabla con:\n- Paginación (HU5098)\n- Filtros aplicados\n- Indicadores de estado\n- Conteo de carreras
+
+FE --> Admin: ✅ Lista de facultades filtrada y paginada
+
+deactivate FE
+
+note right of Admin
+  **Funcionalidades Unificadas:**
+  
+  **HU5094** - Búsqueda por texto:
+  ✅ Filtro por nombre o código
+  ✅ Búsqueda case-insensitive (ILIKE)
+  
+  **HU5096** - Filtro por estado:
+  ✅ Filtrar por estadoActivo (true/false)
+  ✅ Mostrar solo activas por defecto
+  
+  **HU5097** - Filtro por carreras:
+  ✅ minCarreras: mínimo número de carreras
+  ✅ maxCarreras: máximo número de carreras
+  ✅ Conteo dinámico por facultad
+  
+  **HU5098** - Paginación:
+  ✅ page: número de página (1-based)
+  ✅ limit: elementos por página (10-50)
+  ✅ total: total de elementos
+  ✅ totalPages: páginas totales
+end note
+
+@enduml

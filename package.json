@@ -27,7 +27,8 @@
     "docker:dev:logs": "docker-compose -f docker-compose.dev.yml logs -f",
     "docker:clean": "docker-compose down -v --remove-orphans",
     "seed:admin": "ts-node -r tsconfig-paths/register scripts/seed-admin.ts",
-    "seed:facultades": "ts-node -r tsconfig-paths/register scripts/seed-facultades.ts"
+    "seed:facultades": "ts-node -r tsconfig-paths/register scripts/seed-facultades.ts",
+    "seed:decanos": "ts-node -r tsconfig-paths/register scripts/seed-decanos.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

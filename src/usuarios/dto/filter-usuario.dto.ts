@@ -1,4 +1,5 @@
 import { IsOptional, IsEnum, IsBoolean, IsString } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { RolEnum } from '../../common/enums/rol.enum';
 
@@ -15,8 +16,14 @@ export class FilterUsuarioDto {
   @ApiPropertyOptional({
     description: 'Filtrar por estado activo',
     example: true,
+    type: Boolean,
   })
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return undefined;
+  })
   @IsBoolean()
   estadoActivo?: boolean;
 

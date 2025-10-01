@@ -1,16 +1,25 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op } from 'sequelize';
 import { FacultadModel } from './models/facultad.model';
+import { UsuarioModel } from '../usuarios/models/usuario.model';
 import { CreateFacultadDto } from './dto/create-facultad.dto';
 import { UpdateFacultadDto } from './dto/update-facultad.dto';
 import { FilterFacultadDto } from './dto/filter-facultad.dto';
+import { FacultadListResponseDto } from './dto/facultad-list-response.dto';
+import { PaginatedFacultadResponseDto } from './dto/paginated-facultad-response.dto';
+import { CarrerasService } from '../carreras/carreras.service';
+import { RolEnum } from '../common/enums/rol.enum';
 
 @Injectable()
 export class FacultadesService {
   constructor(
     @InjectModel(FacultadModel)
     private readonly facultadModel: typeof FacultadModel,
+    @InjectModel(UsuarioModel)
+    private readonly usuarioModel: typeof UsuarioModel,
+    @Inject(forwardRef(() => CarrerasService))
+    private readonly carrerasService: CarrerasService,
   ) {}
 
   async create(createFacultadDto: CreateFacultadDto): Promise<FacultadModel> {
@@ -69,6 +78,134 @@ export class FacultadesService {
       where: whereClause,
       order: [['nombre', 'ASC']],
     });
+  }
+
+  // Método específico para administradores con información completa
+  async findAllForAdmin(filterDto?: FilterFacultadDto): Promise<FacultadListResponseDto[]> {
+    const facultades = await this.findAll(filterDto);
+
+    // Transformar los datos al formato requerido para administradores
+    return await Promise.all(facultades.map(async (facultad) => {
+      // Contar carreras reales por facultad
+      const numeroCarreras = await this.carrerasService.getCarrerasCountByFacultad(facultad.id);
+      
+      // Buscar el decano real de la facultad
+      const decano = await this.findDecanoByFacultadId(facultad.id);
+
+      return {
+        id: facultad.id,
+        codigo: facultad.codigo,
+        nombre: facultad.nombre,
+        descripcion: facultad.descripcion,
+        numeroCarreras,
+        decano,
+        estadoActivo: facultad.estadoActivo,
+        createdAt: facultad.createdAt,
+        updatedAt: facultad.updatedAt,
+      };
+    }));
+  }
+
+  // Método auxiliar para encontrar el decano de una facultad
+  private async findDecanoByFacultadId(facultadId: number): Promise<{ id: number; nombres: string; apellidos: string; correo: string; } | null> {
+    // Buscar el decano específico de esta facultad usando la relación facultadId
+    const decano = await this.usuarioModel.findOne({
+      where: { 
+        rol: RolEnum.DECANO,
+        estadoActivo: true,
+        facultadId: facultadId  // Ahora filtramos por la facultad específica
+      },
+      attributes: ['id', 'nombres', 'apellidos', 'correo'],
+    });
+    
+    return decano ? {
+      id: decano.id,
+      nombres: decano.nombres,
+      apellidos: decano.apellidos,
+      correo: decano.correo,
+    } : null;
+  }
+
+  // Método para administradores con filtros avanzados y paginación
+  async findAllForAdminPaginated(filterDto?: FilterFacultadDto): Promise<PaginatedFacultadResponseDto> {
+    const page = filterDto?.page || 1;
+    const limit = filterDto?.limit || 10;
+    const offset = (page - 1) * limit;
+
+    // Construir whereClause base
+    const whereClause: any = {};
+    
+    if (filterDto?.estadoActivo !== undefined) {
+      whereClause.estadoActivo = filterDto.estadoActivo;
+    }
+
+    if (filterDto?.search) {
+      whereClause[Op.or] = [
+        { codigo: { [Op.iLike]: `%${filterDto.search}%` } },
+        { nombre: { [Op.iLike]: `%${filterDto.search}%` } },
+      ];
+    }
+
+    // Obtener facultades con paginación
+    const { rows: facultades, count: total } = await this.facultadModel.findAndCountAll({
+      where: whereClause,
+      order: [['nombre', 'ASC']],
+      limit,
+      offset,
+    });
+
+    // Transformar los datos y aplicar filtro por número de carreras
+    const facultadesCompletas: FacultadListResponseDto[] = [];
+    
+    for (const facultad of facultades) {
+      // Contar carreras reales por facultad
+      const numeroCarreras = await this.carrerasService.getCarrerasCountByFacultad(facultad.id);
+      
+      // Aplicar filtro por número de carreras si está especificado
+      if (filterDto?.numeroCarrerasMin !== undefined && numeroCarreras < filterDto.numeroCarrerasMin) {
+        continue;
+      }
+      if (filterDto?.numeroCarrerasMax !== undefined && numeroCarreras > filterDto.numeroCarrerasMax) {
+        continue;
+      }
+      
+      // Buscar el decano real de la facultad
+      const decano = await this.findDecanoByFacultadId(facultad.id);
+
+      facultadesCompletas.push({
+        id: facultad.id,
+        codigo: facultad.codigo,
+        nombre: facultad.nombre,
+        descripcion: facultad.descripcion,
+        numeroCarreras,
+        decano,
+        estadoActivo: facultad.estadoActivo,
+        createdAt: facultad.createdAt,
+        updatedAt: facultad.updatedAt,
+      });
+    }
+
+    // Calcular metadatos de paginación
+    const totalPages = Math.ceil(total / limit);
+    const hasNext = page < totalPages;
+    const hasPrev = page > 1;
+    const startIndex = facultadesCompletas.length > 0 ? offset + 1 : 0;
+    const endIndex = startIndex + facultadesCompletas.length - 1;
+
+    return {
+      data: facultadesCompletas,
+      total,
+      page,
+      limit,
+      totalPages,
+      hasNext,
+      hasPrev,
+      meta: {
+        startIndex,
+        endIndex,
+        hasData: facultadesCompletas.length > 0,
+      },
+    };
   }
 
   async findOne(id: number): Promise<FacultadModel> {

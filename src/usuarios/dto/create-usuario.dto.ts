@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsNotEmpty, IsString, MinLength, IsBoolean, IsOptional } from 'class-validator';
+import { IsEmail, IsEnum, IsNotEmpty, IsString, MinLength, IsBoolean, IsOptional, IsNumber, IsPositive } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { RolEnum } from '../../common/enums/rol.enum';
 
@@ -50,13 +50,51 @@ export class CreateUsuarioDto {
   contrasena: string;
 
   @ApiProperty({
-    description: 'Rol del usuario en el sistema',
+    description: 'Rol del usuario en el sistema. IMPORTANTE: Los roles DECANO y SUBDECANO requieren facultadId y solo puede haber uno por facultad.',
     enum: RolEnum,
     example: RolEnum.PROFESOR,
+    examples: {
+      administrador: {
+        summary: 'Administrador del sistema',
+        value: RolEnum.ADMINISTRADOR,
+      },
+      decano: {
+        summary: 'Decano de facultad (requiere facultadId, máximo 1 por facultad)',
+        value: RolEnum.DECANO,
+      },
+      subdecano: {
+        summary: 'Subdecano de facultad (requiere facultadId, máximo 1 por facultad)',
+        value: RolEnum.SUBDECANO,
+      },
+      profesor: {
+        summary: 'Profesor general',
+        value: RolEnum.PROFESOR,
+      },
+    },
   })
   @IsNotEmpty()
   @IsEnum(RolEnum)
   rol: RolEnum;
+
+  @ApiProperty({
+    description: 'ID de la facultad a la que pertenece el usuario. OBLIGATORIO para roles DECANO, SUBDECANO y JEFE_DEPARTAMENTO. Opcional para otros roles.',
+    example: 1,
+    required: false,
+    examples: {
+      ingenieria: {
+        summary: 'Facultad de Ingeniería',
+        value: 1,
+      },
+      medicina: {
+        summary: 'Facultad de Medicina',
+        value: 2,
+      },
+    },
+  })
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  facultadId?: number;
 
   @ApiProperty({
     description: 'Estado activo del usuario',

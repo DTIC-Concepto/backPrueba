@@ -1,0 +1,155 @@
+@startuml HU5108 - Crear Carrera
+
+title HU5108: Registrar nueva carrera académica
+
+actor "Administrador" as Admin
+participant "Frontend" as FE
+participant "JWT Guard" as JWT
+participant "Roles Guard" as RG
+participant "CarrerasController" as CC
+participant "CarrerasService" as CS
+participant "FacultadModel" as FM
+participant "UsuarioModel" as UM
+participant "Sequelize ORM" as ORM
+database "PostgreSQL" as DB
+
+Admin -> FE: Accede al formulario de crear carrera
+activate FE
+
+FE -> FE: Carga datos de formulario:\n- Lista de facultades activas\n- Lista de usuarios (profesores/coordinadores)
+
+FE -> FE: Completa formulario:\n- Código (único)\n- Nombre\n- Facultad\n- Coordinador (puede ser profesor)
+
+Admin -> FE: Envía POST /carreras
+FE -> CC: POST /carreras\n{codigo, nombre, facultadId, coordinadorId, estadoActivo}
+activate CC
+
+CC -> JWT: Validar token JWT
+activate JWT
+JWT --> CC: Token válido
+deactivate JWT
+
+CC -> RG: Verificar rol ADMINISTRADOR
+activate RG
+RG --> CC: Rol autorizado
+deactivate RG
+
+CC -> CS: create(createCarreraDto)
+activate CS
+
+== Validación de Código Único ==
+
+CS -> ORM: findOne({where: {codigo}})
+activate ORM
+ORM -> DB: SELECT * FROM carreras WHERE codigo = ?
+activate DB
+DB --> ORM: Carrera existente o null
+deactivate DB
+ORM --> CS: Resultado consulta
+deactivate ORM
+
+alt Código ya existe
+    CS --> CC: throw BadRequestException\n"Ya existe una carrera con el código X"
+    CC --> FE: 400 Bad Request
+    FE --> Admin: Error: Código duplicado
+else Código único
+    
+    == Validación de Facultad ==
+    
+    CS -> FM: findByPk(facultadId)
+    activate FM
+    FM -> DB: SELECT * FROM facultades WHERE id = ?
+    activate DB
+    DB --> FM: Facultad o null
+    deactivate DB
+    FM --> CS: Facultad válida o null
+    deactivate FM
+    
+    alt Facultad no existe
+        CS --> CC: throw BadRequestException\n"No existe la facultad con ID X"
+        CC --> FE: 400 Bad Request
+        FE --> Admin: Error: Facultad inválida
+    else Facultad válida
+        
+        == Validación y Promoción de Coordinador ==
+        
+        CS -> UM: findByPk(coordinadorId)
+        activate UM
+        UM -> DB: SELECT * FROM usuarios WHERE id = ?
+        activate DB
+        DB --> UM: Usuario o null
+        deactivate DB
+        UM --> CS: Datos del usuario
+        deactivate UM
+        
+        alt Usuario no existe
+            CS --> CC: throw BadRequestException\n"No existe el usuario con ID X"
+            CC --> FE: 400 Bad Request
+            FE --> Admin: Error: Usuario inválido
+        else Usuario existe
+            
+            alt Rol es PROFESOR
+                CS -> UM: update({rol: COORDINADOR})
+                activate UM
+                UM -> DB: UPDATE usuarios SET rol = 'COORDINADOR' WHERE id = ?
+                activate DB
+                DB --> UM: Usuario actualizado
+                deactivate DB
+                UM --> CS: ✅ Profesor promocionado a Coordinador
+                deactivate UM
+                
+                note right of CS
+                  **Promoción Automática:**
+                  Si el usuario seleccionado es PROFESOR,
+                  se promociona automáticamente a COORDINADOR
+                  al asignarlo como coordinador de carrera
+                end note
+            end
+            
+            == Creación de Carrera ==
+            
+            CS -> ORM: create(carreraData)
+            activate ORM
+            ORM -> DB: INSERT INTO carreras\n(codigo, nombre, facultadId, coordinadorId, estadoActivo)
+            activate DB
+            DB --> ORM: Nueva carrera creada
+            deactivate DB
+            ORM --> CS: CarreraModel creada
+            deactivate ORM
+            
+            == Obtención de Carrera con Relaciones ==
+            
+            CS -> CS: findOne(nuevaCarrera.id)
+            CS -> ORM: findByPk con includes
+            activate ORM
+            ORM -> DB: SELECT carreras.*, facultades.*, usuarios.*\nFROM carreras\nJOIN facultades ON carreras.facultadId = facultades.id\nJOIN usuarios ON carreras.coordinadorId = usuarios.id\nWHERE carreras.id = ?
+            activate DB
+            DB --> ORM: Carrera completa con relaciones
+            deactivate DB
+            ORM --> CS: Carrera con facultad y coordinador
+            deactivate ORM
+            
+            CS --> CC: Carrera creada exitosamente
+            deactivate CS
+            CC --> FE: 201 Created\n{\n  id, codigo, nombre, estadoActivo,\n  facultad: {id, nombre, codigo},\n  coordinador: {id, nombres, apellidos, correo, rol}\n}
+            deactivate CC
+            FE --> Admin: ✅ Carrera registrada exitosamente\n(Coordinador promocionado si era profesor)
+        end
+    end
+end
+
+deactivate FE
+
+note right of Admin
+  **Criterios de Aceptación:**
+  ✅ Solo administradores pueden crear carreras
+  ✅ El código debe ser único en el sistema
+  ✅ La facultad debe existir y estar activa
+  ✅ Si el coordinador es PROFESOR, se promociona a COORDINADOR
+  ✅ Roles válidos para coordinador: PROFESOR, COORDINADOR, 
+     JEFE_DEPARTAMENTO, SUBDECANO, DECANO, ADMINISTRADOR
+  ✅ La carrera se retorna con sus relaciones completas
+  ✅ Estado activo por defecto es true
+end note
+
+@enduml

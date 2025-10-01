@@ -1,0 +1,160 @@
+@startuml HU5102 - Crear Usuario
+
+title HU5102: Registrar nuevo usuario con validaciones y asignación de roles
+
+actor "Administrador" as Admin
+participant "Frontend" as FE
+participant "JWT Guard" as JWT
+participant "Roles Guard" as RG
+participant "UsuariosController" as UC
+participant "UsuariosService" as US
+participant "FacultadModel" as FM
+participant "Sequelize ORM" as ORM
+database "PostgreSQL" as DB
+
+Admin -> FE: Accede al formulario de crear usuario
+activate FE
+
+FE -> FE: Carga datos de formulario:\n- Lista de facultades (para roles específicos)\n- Roles disponibles
+
+FE -> FE: Completa formulario:\n- Datos personales (nombres, apellidos, cédula)\n- Datos de acceso (correo, contraseña)\n- Rol del usuario\n- Facultad (si aplica para el rol)
+
+Admin -> FE: Envía POST /usuarios
+FE -> UC: POST /usuarios\n{nombres, apellidos, cedula, correo, contrasena, rol, facultadId?, estadoActivo?}
+activate UC
+
+UC -> JWT: Validar token JWT
+activate JWT
+JWT --> UC: Token válido
+deactivate JWT
+
+UC -> RG: Verificar rol ADMINISTRADOR
+activate RG
+RG --> UC: Rol autorizado
+deactivate RG
+
+UC -> US: create(createUsuarioDto)
+activate US
+
+== Validaciones de Unicidad ==
+
+US -> ORM: findOne({where: {correo}})
+activate ORM
+ORM -> DB: SELECT * FROM usuarios WHERE correo = ?
+activate DB
+DB --> ORM: Usuario existente o null
+deactivate DB
+ORM --> US: Resultado consulta email
+deactivate ORM
+
+alt Email ya existe
+    US --> UC: throw BadRequestException\n"Ya existe un usuario con este correo electrónico"
+    UC --> FE: 400 Bad Request
+    FE --> Admin: Error: Email duplicado
+else Email único
+    US -> ORM: findOne({where: {cedula}})
+    activate ORM
+    ORM -> DB: SELECT * FROM usuarios WHERE cedula = ?
+    activate DB
+    DB --> ORM: Usuario existente o null
+    deactivate DB
+    ORM --> US: Resultado consulta cédula
+    deactivate ORM
+    
+    alt Cédula ya existe
+        US --> UC: throw BadRequestException\n"Ya existe un usuario con esta cédula"
+        UC --> FE: 400 Bad Request
+        FE --> Admin: Error: Cédula duplicada
+    else Cédula única
+        
+        == Validación de Roles Únicos por Facultad ==
+        
+        alt Rol es DECANO o SUBDECANO
+            US -> US: validateUniqueRolePerFaculty(rol, facultadId)
+            
+            alt facultadId no proporcionado
+                US --> UC: throw BadRequestException\n"El rol DECANO/SUBDECANO requiere asignación a una facultad específica"
+                UC --> FE: 400 Bad Request
+                FE --> Admin: Error: Falta facultad para el rol
+            else facultadId proporcionado
+                US -> ORM: findOne({where: {rol, facultadId, estadoActivo: true}})
+                activate ORM
+                ORM -> DB: SELECT * FROM usuarios\nWHERE rol = ? AND facultadId = ? AND estadoActivo = true
+                activate DB
+                DB --> ORM: Usuario con mismo rol en facultad o null
+                deactivate DB
+                ORM --> US: Resultado validación unicidad
+                deactivate ORM
+                
+                alt Ya existe usuario con ese rol en la facultad
+                    US --> UC: throw ConflictException\n"Ya existe un usuario con el rol X en esta facultad: Nombre Apellido"
+                    UC --> FE: 409 Conflict
+                    FE --> Admin: Error: Rol único violado
+                else Rol único válido
+                    note right of US
+                      **Validación de Roles Únicos:**
+                      - DECANO: máximo 1 por facultad
+                      - SUBDECANO: máximo 1 por facultad
+                      - Otros roles: sin restricción
+                    end note
+                end
+            end
+        end
+        
+        == Creación de Usuario ==
+        
+        US -> ORM: create(userData)
+        activate ORM
+        
+        note right of ORM
+          **Hook BeforeCreate activo:**
+          La contraseña se encripta automáticamente
+          usando bcrypt con salt de 12 rounds
+        end note
+        
+        ORM -> DB: INSERT INTO usuarios\n(nombres, apellidos, cedula, correo, contrasena_encriptada, rol, facultadId, estadoActivo)
+        activate DB
+        DB --> ORM: Nuevo usuario creado
+        deactivate DB
+        ORM --> US: UsuarioModel creado (sin contraseña en respuesta)
+        deactivate ORM
+        
+        US --> UC: Usuario creado exitosamente
+        deactivate US
+        UC --> FE: 201 Created\n{\n  id, nombres, apellidos, cedula, correo,\n  rol, facultadId, estadoActivo,\n  createdAt, updatedAt\n}
+        deactivate UC
+        FE --> Admin: ✅ Usuario registrado exitosamente
+    end
+end
+
+deactivate FE
+
+note right of Admin
+  **Criterios de Aceptación Implementados:**
+  
+  **✅ Validación de Unicidad:**
+  - Cédula única en el sistema
+  - Email único en el sistema
+  
+  **✅ Asignación de Roles y Facultad:**
+  - DECANO: requiere facultadId, máximo 1 por facultad
+  - SUBDECANO: requiere facultadId, máximo 1 por facultad
+  - JEFE_DEPARTAMENTO: puede tener facultadId
+  - COORDINADOR: sin restricciones especiales
+  - PROFESOR: sin restricciones especiales
+  - ADMINISTRADOR: sin restricciones especiales
+  
+  **✅ Esquema de Base de Datos:**
+  - Campo facultadId como foreign key opcional
+  - Índices para performance
+  - Encriptación automática de contraseñas
+  - Timestamps automáticos
+  
+  **✅ Endpoint POST /usuarios:**
+  - Solo accesible para administradores
+  - Validaciones completas
+  - Documentación Swagger detallada
+  - Respuestas de error específicas
+end note
+
+@enduml

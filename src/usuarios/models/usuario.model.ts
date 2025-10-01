@@ -8,9 +8,13 @@ import {
   Index,
   CreatedAt,
   UpdatedAt,
+  ForeignKey,
+  BelongsTo,
+  HasMany,
 } from 'sequelize-typescript';
 import * as bcrypt from 'bcrypt';
 import { RolEnum } from '../../common/enums/rol.enum';
+import { FacultadModel } from '../../facultades/models/facultad.model';
 
 @Table({
   tableName: 'usuarios',
@@ -73,6 +77,14 @@ export class UsuarioModel extends Model<UsuarioModel> {
   })
   declare rol: RolEnum;
 
+  @ForeignKey(() => FacultadModel)
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true, // Puede ser null si el usuario no está asignado a una facultad específica
+    comment: 'ID de la facultad a la que pertenece como decano/subdecano/jefe de departamento',
+  })
+  declare facultadId: number | null;
+
   @Column({
     type: DataType.BOOLEAN,
     allowNull: false,
@@ -85,6 +97,12 @@ export class UsuarioModel extends Model<UsuarioModel> {
 
   @UpdatedAt
   declare updatedAt: Date;
+
+  // Relaciones
+  @BelongsTo(() => FacultadModel, { foreignKey: 'facultadId', as: 'facultad' })
+  facultad: FacultadModel;
+
+  // Nota: La relación con CarreraModel se define desde el lado de Carrera para evitar dependencias circulares
 
   // Hook para encriptar contraseña antes de crear
   @BeforeCreate

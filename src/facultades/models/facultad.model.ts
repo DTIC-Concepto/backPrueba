@@ -6,7 +6,10 @@ import {
   Index,
   CreatedAt,
   UpdatedAt,
+  HasMany,
 } from 'sequelize-typescript';
+import { CarreraModel } from '../../carreras/models/carrera.model';
+import { UsuarioModel } from '../../usuarios/models/usuario.model';
 
 @Table({
   tableName: 'facultades',
@@ -55,4 +58,21 @@ export class FacultadModel extends Model<FacultadModel> {
 
   @UpdatedAt
   declare updatedAt: Date;
+
+  // Relaciones
+  @HasMany(() => CarreraModel, { foreignKey: 'facultadId', as: 'carreras' })
+  carreras: CarreraModel[];
+
+  // Relación con usuarios de la facultad
+  @HasMany(() => UsuarioModel, { foreignKey: 'facultadId' })
+  usuarios: UsuarioModel[];
+
+  // Método helper para obtener el decano
+  getDecano?(): Promise<UsuarioModel | null>;
+
+  // Método helper para obtener el subdecano  
+  getSubdecano?(): Promise<UsuarioModel | null>;
+
+  // Método helper para obtener jefes de departamento
+  getJefesDepartamento?(): Promise<UsuarioModel[]>;
 }

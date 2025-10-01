@@ -1,0 +1,79 @@
+@startuml HU5100 - Crear Facultad
+
+title HU5100: Registrar nueva facultad
+
+actor "Administrador" as Admin
+participant "Frontend" as FE
+participant "JWT Guard" as JWT
+participant "Roles Guard" as RG
+participant "FacultadesController" as FC
+participant "FacultadesService" as FS
+participant "Sequelize ORM" as ORM
+database "PostgreSQL" as DB
+
+Admin -> FE: Accede al formulario de crear facultad
+activate FE
+
+FE -> FE: Completa formulario:\n- Código (único)\n- Nombre\n- Descripción\n- Estado activo
+
+Admin -> FE: Envía POST /facultades
+FE -> FC: POST /facultades\n{codigo, nombre, descripcion, estadoActivo}
+activate FC
+
+FC -> JWT: Validar token JWT
+activate JWT
+JWT --> FC: Token válido
+deactivate JWT
+
+FC -> RG: Verificar rol ADMINISTRADOR
+activate RG
+RG --> FC: Rol autorizado
+deactivate RG
+
+FC -> FS: create(createFacultadDto)
+activate FS
+
+== Validaciones ==
+FS -> ORM: findOne({where: {codigo}})
+activate ORM
+ORM -> DB: SELECT * FROM facultades WHERE codigo = ?
+activate DB
+DB --> ORM: Resultado consulta
+deactivate DB
+ORM --> FS: Facultad existente o null
+deactivate ORM
+
+alt Código ya existe
+    FS --> FC: throw ConflictException\n"El código ya está registrado"
+    FC --> FE: 409 Conflict
+    FE --> Admin: Error: Código duplicado
+else Código único
+    == Creación de Facultad ==
+    FS -> ORM: create(facultadData)
+    activate ORM
+    ORM -> DB: INSERT INTO facultades\n(codigo, nombre, descripcion, estadoActivo)
+    activate DB
+    DB --> ORM: Nueva facultad creada
+    deactivate DB
+    ORM --> FS: FacultadModel creada
+    deactivate ORM
+    
+    FS --> FC: Facultad creada exitosamente
+    deactivate FS
+    FC --> FE: 201 Created\n{id, codigo, nombre, descripcion, estadoActivo, createdAt, updatedAt}
+    deactivate FC
+    FE --> Admin: ✅ Facultad registrada exitosamente
+end
+
+deactivate FE
+
+note right of Admin
+  **Criterios de Aceptación:**
+  ✅ Solo administradores pueden crear facultades
+  ✅ El código debe ser único en el sistema
+  ✅ Validación de campos obligatorios
+  ✅ Estado activo por defecto es true
+  ✅ Registro de timestamps automáticos
+end note
+
+@enduml
