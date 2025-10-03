@@ -22,9 +22,9 @@ async function bootstrap() {
       nombres: 'Administrador',
       apellidos: 'del Sistema',
       cedula: '1234567890',
-      correo: 'admin@poliacredita.edu.ec',
+      correo: 'admin@epn.edu.ec',
       contrasena: 'admin123',
-      rol: RolEnum.DGIP,
+      rol: RolEnum.ADMINISTRADOR,
       estadoActivo: true,
     };
 

@@ -19,8 +19,8 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
-    summary: 'Iniciar sesión',
-    description: 'Autentica un usuario y devuelve un token JWT válido junto con la información del usuario. Es obligatorio especificar el rol para validar el acceso.',
+    summary: 'Iniciar sesión con selección de rol',
+    description: 'Autentica un usuario y devuelve un token JWT válido. Los usuarios pueden tener múltiples roles asignados, pero deben seleccionar uno específico para la sesión. El sistema valida que el rol seleccionado esté entre los roles asignados al usuario. También se puede cambiar de rol durante la sesión usando el endpoint /auth/switch-role.',
   })
   @ApiBody({ 
     type: LoginDto,

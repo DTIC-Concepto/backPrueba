@@ -15,6 +15,7 @@ import {
 import * as bcrypt from 'bcrypt';
 import { RolEnum } from '../../common/enums/rol.enum';
 import { FacultadModel } from '../../facultades/models/facultad.model';
+import { UsuarioRolModel } from '../../common/models/usuario-rol.model';
 
 @Table({
   tableName: 'usuarios',
@@ -102,6 +103,10 @@ export class UsuarioModel extends Model<UsuarioModel> {
   @BelongsTo(() => FacultadModel, { foreignKey: 'facultadId', as: 'facultad' })
   facultad: FacultadModel;
 
+  // Relación many-to-many con roles
+  @HasMany(() => UsuarioRolModel, { foreignKey: 'usuarioId', as: 'usuarioRoles' })
+  usuarioRoles: UsuarioRolModel[];
+
   // Nota: La relación con CarreraModel se define desde el lado de Carrera para evitar dependencias circulares
 
   // Hook para encriptar contraseña antes de crear
@@ -140,5 +145,43 @@ export class UsuarioModel extends Model<UsuarioModel> {
     const values = Object.assign({}, this.get()) as any;
     delete values.contrasena;
     return values;
+  }
+
+  // Métodos helper para múltiples roles
+  /**
+   * Obtiene todos los roles activos del usuario
+   */
+  async getRoles(): Promise<RolEnum[]> {
+    if (this.usuarioRoles) {
+      return this.usuarioRoles
+        .filter(ur => ur.activo)
+        .map(ur => ur.rol);
+    }
+    
+    // Si no están cargadas las relaciones, incluir el rol principal
+    return this.rol ? [this.rol] : [];
+  }
+
+  /**
+   * Verifica si el usuario tiene un rol específico
+   */
+  async hasRole(role: RolEnum): Promise<boolean> {
+    const roles = await this.getRoles();
+    return roles.includes(role);
+  }
+
+  /**
+   * Verifica si el usuario tiene alguno de los roles especificados
+   */
+  async hasAnyRole(roles: RolEnum[]): Promise<boolean> {
+    const userRoles = await this.getRoles();
+    return roles.some(role => userRoles.includes(role));
+  }
+
+  /**
+   * Obtiene el rol principal (compatibilidad con código existente)
+   */
+  getPrimaryRole(): RolEnum {
+    return this.rol;
   }
 }

@@ -1,0 +1,290 @@
+@startuml diagrama-secuencia-cambiar-contrasena-personal
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequenceParticipantBorderColor #2E5C8B
+skinparam sequenceActorBorderColor #2E5C8B
+skinparam sequenceActorBackgroundColor #E8F4FD
+skinparam sequenceParticipantBackgroundColor #E8F4FD
+skinparam sequenceMessageTextSize 11
+skinparam sequenceActorFontSize 11
+skinparam sequenceParticipantFontSize 11
+
+title HU5115: Cambiar Contraseña Personal del Usuario
+
+actor "Usuario\nAutenticado" as user
+participant "Frontend\n(Cliente)" as frontend
+participant "Auth Guard\n(JWT)" as auth
+participant "UsuariosController" as controller
+participant "ValidationPipe" as validator
+participant "UsuariosService" as service
+participant "UsuarioModel\n(Sequelize)" as model
+participant "bcrypt\n(Hashing)" as bcrypt
+database "PostgreSQL\nDatabase" as db
+
+== Caso Exitoso: Cambio de Contraseña ==
+
+user -> frontend: PUT /me/password\n{\n  "contrasenaActual": "MiContraseña123!",\n  "contrasenaNueva": "NuevaSegura456#",\n  "confirmarContrasena": "NuevaSegura456#"\n}
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth -> auth: Validar token y usuario activo
+auth --> frontend: Token válido, usuario autenticado
+deactivate auth
+
+frontend -> controller: PUT /me/password + user context
+activate controller
+
+controller -> validator: Validar ChangePasswordDto
+activate validator
+validator -> validator: @IsNotEmpty() contrasenaActual\n@MinLength(8) contrasenaNueva\n@Matches(regex) contrasenaNueva
+validator --> controller: ✅ Validaciones exitosas
+deactivate validator
+
+controller -> service: changePassword(userId, changePasswordDto)
+activate service
+
+service -> service: Verificar contraseñas coinciden
+service -> service: contrasenaNueva === confirmarContrasena
+service -> service: ✅ Contraseñas coinciden
+
+service -> model: findByPk(userId)
+activate model
+model -> db: SELECT * FROM usuarios WHERE id = userId
+activate db
+db --> model: Usuario encontrado
+deactivate db
+model --> service: UsuarioModel instance
+deactivate model
+
+service -> service: Verificar usuario activo
+service -> service: ✅ usuario.estadoActivo === true
+
+service -> model: usuario.validatePassword(contrasenaActual)
+activate model
+model -> bcrypt: bcrypt.compare(contrasenaActual, hashedPassword)
+activate bcrypt
+bcrypt --> model: ✅ Contraseña válida
+deactivate bcrypt
+model --> service: true
+deactivate model
+
+service -> model: usuario.validatePassword(contrasenaNueva)
+activate model
+model -> bcrypt: bcrypt.compare(contrasenaNueva, hashedPassword)
+activate bcrypt
+bcrypt --> model: ✅ Contraseña diferente
+deactivate bcrypt
+model --> service: false (contraseña diferente)
+deactivate model
+
+service -> model: usuario.update({contrasena: contrasenaNueva})
+activate model
+model -> model: Hook beforeUpdate activado
+model -> bcrypt: genSalt(12)
+activate bcrypt
+bcrypt --> model: Salt generado
+deactivate bcrypt
+model -> bcrypt: hash(contrasenaNueva, salt)
+activate bcrypt
+bcrypt --> model: Contraseña hasheada
+deactivate bcrypt
+model -> db: UPDATE usuarios SET contrasena = hashedPassword\nWHERE id = userId
+activate db
+db --> model: Contraseña actualizada
+deactivate db
+model --> service: Actualización exitosa
+deactivate model
+
+service --> controller: {message: "Contraseña actualizada exitosamente"}
+deactivate service
+
+controller --> frontend: 200 OK\n{\n  "message": "Contraseña actualizada exitosamente"\n}
+deactivate controller
+
+frontend --> user: ✅ Contraseña cambiada exitosamente
+deactivate frontend
+
+== Caso de Error: Contraseña Actual Incorrecta ==
+
+user -> frontend: PUT /me/password\n{\n  "contrasenaActual": "ContraseñaIncorrecta",\n  "contrasenaNueva": "NuevaSegura456#",\n  "confirmarContrasena": "NuevaSegura456#"\n}
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth --> frontend: Token válido
+deactivate auth
+
+frontend -> controller: PUT /me/password
+activate controller
+
+controller -> validator: Validar datos
+activate validator
+validator --> controller: Datos válidos
+deactivate validator
+
+controller -> service: changePassword(userId, changePasswordDto)
+activate service
+
+service -> service: Verificar contraseñas coinciden
+service -> service: ✅ Contraseñas nuevas coinciden
+
+service -> model: findByPk(userId)
+activate model
+model --> service: Usuario encontrado
+deactivate model
+
+service -> model: usuario.validatePassword(contrasenaActual)
+activate model
+model -> bcrypt: bcrypt.compare("ContraseñaIncorrecta", hashedPassword)
+activate bcrypt
+bcrypt --> model: ❌ Contraseña inválida
+deactivate bcrypt
+model --> service: false
+deactivate model
+
+service -> service: throw BadRequestException
+service --> controller: ❌ La contraseña actual es incorrecta
+deactivate service
+
+controller --> frontend: 400 Bad Request\n{\n  "statusCode": 400,\n  "message": "La contraseña actual es incorrecta",\n  "error": "Bad Request"\n}
+deactivate controller
+
+frontend --> user: ❌ Error: Contraseña actual incorrecta
+deactivate frontend
+
+== Caso de Error: Política de Seguridad No Cumplida ==
+
+user -> frontend: PUT /me/password\n{\n  "contrasenaActual": "MiContraseña123!",\n  "contrasenaNueva": "123",\n  "confirmarContrasena": "123"\n}
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth --> frontend: Token válido
+deactivate auth
+
+frontend -> controller: PUT /me/password
+activate controller
+
+controller -> validator: Validar ChangePasswordDto
+activate validator
+validator -> validator: @MinLength(8) contrasenaNueva\n❌ "123" < 8 caracteres
+validator -> validator: @Matches(regex) contrasenaNueva\n❌ No cumple complejidad
+validator --> controller: ❌ ValidationError
+deactivate validator
+
+controller --> frontend: 400 Bad Request\n{\n  "statusCode": 400,\n  "message": [\n    "La nueva contraseña debe tener al menos 8 caracteres",\n    "La nueva contraseña debe contener al menos: una letra minúscula, una mayúscula, un número y un carácter especial"\n  ],\n  "error": "Bad Request"\n}
+deactivate controller
+
+frontend --> user: ❌ Error: Contraseña no cumple políticas
+deactivate frontend
+
+== Caso de Error: Contraseñas No Coinciden ==
+
+user -> frontend: PUT /me/password\n{\n  "contrasenaActual": "MiContraseña123!",\n  "contrasenaNueva": "NuevaSegura456#",\n  "confirmarContrasena": "DiferenteContraseña789$"\n}
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth --> frontend: Token válido
+deactivate auth
+
+frontend -> controller: PUT /me/password
+activate controller
+
+controller -> validator: Validar datos individualmente
+activate validator
+validator --> controller: Cada campo válido por separado
+deactivate validator
+
+controller -> service: changePassword(userId, changePasswordDto)
+activate service
+
+service -> service: Verificar contraseñas coinciden
+service -> service: contrasenaNueva !== confirmarContrasena
+service -> service: throw BadRequestException
+service --> controller: ❌ Las contraseñas no coinciden
+deactivate service
+
+controller --> frontend: 400 Bad Request\n{\n  "statusCode": 400,\n  "message": "La nueva contraseña y la confirmación no coinciden",\n  "error": "Bad Request"\n}
+deactivate controller
+
+frontend --> user: ❌ Error: Contraseñas no coinciden
+deactivate frontend
+
+== Caso de Error: Nueva Contraseña Igual a la Actual ==
+
+user -> frontend: PUT /me/password\n{\n  "contrasenaActual": "MiContraseña123!",\n  "contrasenaNueva": "MiContraseña123!",\n  "confirmarContrasena": "MiContraseña123!"\n}
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth --> frontend: Token válido
+deactivate auth
+
+frontend -> controller: PUT /me/password
+activate controller
+
+controller -> validator: Validar datos
+activate validator
+validator --> controller: Datos válidos
+deactivate validator
+
+controller -> service: changePassword(userId, changePasswordDto)
+activate service
+
+service -> service: Verificar contraseñas coinciden
+service -> service: ✅ Contraseñas nuevas coinciden
+
+service -> model: findByPk(userId)
+activate model
+model --> service: Usuario encontrado
+deactivate model
+
+service -> model: usuario.validatePassword(contrasenaActual)
+activate model
+model -> bcrypt: bcrypt.compare(contrasenaActual, hashedPassword)
+activate bcrypt
+bcrypt --> model: ✅ Contraseña válida
+deactivate bcrypt
+model --> service: true
+deactivate model
+
+service -> model: usuario.validatePassword(contrasenaNueva)
+activate model
+model -> bcrypt: bcrypt.compare(contrasenaNueva, hashedPassword)
+activate bcrypt
+bcrypt --> model: ❌ Misma contraseña
+deactivate bcrypt
+model --> service: true (misma contraseña)
+deactivate model
+
+service -> service: throw BadRequestException
+service --> controller: ❌ Nueva contraseña debe ser diferente
+deactivate service
+
+controller --> frontend: 400 Bad Request\n{\n  "statusCode": 400,\n  "message": "La nueva contraseña debe ser diferente a la actual",\n  "error": "Bad Request"\n}
+deactivate controller
+
+frontend --> user: ❌ Error: Contraseña debe ser diferente
+deactivate frontend
+
+note over user, db
+  **Características de Seguridad de la HU5115:**
+  
+  🔐 **Autenticación**: Solo usuarios autenticados pueden cambiar su contraseña
+  🛡️ **Verificación de identidad**: Requiere contraseña actual correcta
+  📏 **Políticas de complejidad**: Mínimo 8 caracteres con mayúsculas, minúsculas, números y símbolos
+  🔒 **Hashing seguro**: bcrypt con salt de 12 rounds para almacenamiento
+  ✅ **Validación doble**: Confirmación de contraseña para evitar errores de tipeo
+  🚫 **Anti-reutilización**: Previene usar la misma contraseña actual
+  🔄 **Hooks automáticos**: El modelo se encarga del hashing transparentemente
+  
+  **Casos de uso principales:**
+  • Cambio rutinario de contraseña por seguridad
+  • Respuesta ante sospecha de compromiso de cuenta
+  • Cumplimiento de políticas de seguridad institucional
+  • Recuperación de cuenta comprometida
+end note
+
+@enduml

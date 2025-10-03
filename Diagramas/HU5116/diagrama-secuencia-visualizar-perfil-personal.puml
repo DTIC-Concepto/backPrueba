@@ -1,0 +1,233 @@
+@startuml diagrama-secuencia-visualizar-perfil-personal
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequenceParticipantBorderColor #2E5C8B
+skinparam sequenceActorBorderColor #2E5C8B
+skinparam sequenceActorBackgroundColor #E8F4FD
+skinparam sequenceParticipantBackgroundColor #E8F4FD
+skinparam sequenceMessageTextSize 11
+skinparam sequenceActorFontSize 11
+skinparam sequenceParticipantFontSize 11
+
+title HU5116: Visualizar Perfil Personal del Usuario
+
+actor "Usuario\nAutenticado" as user
+participant "Frontend\n(Cliente)" as frontend
+participant "Auth Guard\n(JWT)" as auth
+participant "UsuariosController" as controller
+participant "UsuariosService" as service
+participant "UsuarioModel\n(Sequelize)" as model
+database "PostgreSQL\nDatabase" as db
+
+== Caso Exitoso: Obtener Perfil Personal ==
+
+user -> frontend: GET /me/profile
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth -> auth: Validar token y extraer userId
+auth -> auth: Verificar usuario activo y token válido
+auth --> frontend: ✅ Token válido, usuario autenticado\n(user.id = 5)
+deactivate auth
+
+frontend -> controller: GET /me/profile + user context
+activate controller
+
+controller -> service: getProfile(user.id = 5)
+activate service
+
+service -> model: findByPk(5, {include: facultad})
+activate model
+model -> db: SELECT u.*, f.id as "facultad.id",\nf.nombre as "facultad.nombre",\nf.codigo as "facultad.codigo"\nFROM usuarios u\nLEFT JOIN facultades f ON u.facultadId = f.id\nWHERE u.id = 5
+activate db
+db --> model: Usuario encontrado con facultad
+deactivate db
+model --> service: UsuarioModel instance con relaciones
+deactivate model
+
+service -> service: Verificar usuario activo
+service -> service: ✅ usuario.estadoActivo = true
+
+service -> service: Construir UserProfileDto (sin contraseña)
+service -> service: Mapear datos seguros:\n- id, nombres, apellidos\n- cedula, correo, rol\n- estadoActivo, facultad\n- createdAt, updatedAt
+
+service --> controller: UserProfileDto\n{\n  id: 5,\n  nombres: "Carlos Eduardo",\n  apellidos: "Rodríguez Silva",\n  cedula: "1234567890",\n  correo: "carlos.rodriguez@epn.edu.ec",\n  rol: "PROFESOR",\n  estadoActivo: true,\n  facultad: {\n    id: 1,\n    nombre: "Facultad de Ingeniería de Sistemas",\n    codigo: "FIS"\n  },\n  createdAt: "2024-01-15T10:30:00.000Z",\n  updatedAt: "2024-01-20T15:45:00.000Z"\n}
+deactivate service
+
+controller --> frontend: 200 OK + UserProfileDto
+deactivate controller
+
+frontend --> user: ✅ Perfil personal obtenido\n📋 Información completa y actualizada
+deactivate frontend
+
+== Caso Exitoso: Perfil de Administrador (Sin Facultad) ==
+
+user -> frontend: GET /me/profile\n(Usuario administrador)
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth --> frontend: Token válido (user.id = 1, rol = ADMINISTRADOR)
+deactivate auth
+
+frontend -> controller: GET /me/profile
+activate controller
+
+controller -> service: getProfile(1)
+activate service
+
+service -> model: findByPk(1, {include: facultad})
+activate model
+model -> db: SELECT u.*, f.* FROM usuarios u\nLEFT JOIN facultades f ON u.facultadId = f.id\nWHERE u.id = 1
+activate db
+db --> model: Usuario administrador (sin facultad asociada)
+deactivate db
+model --> service: UsuarioModel (facultad = null)
+deactivate model
+
+service -> service: Verificar usuario activo ✅
+service -> service: Construir perfil con facultad = undefined
+
+service --> controller: UserProfileDto sin facultad\n{\n  id: 1,\n  nombres: "María Elena",\n  apellidos: "García López",\n  ...\n  rol: "ADMINISTRADOR",\n  facultad: undefined\n}
+deactivate service
+
+controller --> frontend: 200 OK
+deactivate controller
+
+frontend --> user: ✅ Perfil de administrador obtenido
+deactivate frontend
+
+== Caso de Error: Token JWT Inválido ==
+
+user -> frontend: GET /me/profile\n(Token inválido o expirado)
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth -> auth: Validar token
+auth -> auth: ❌ Token inválido/expirado
+auth --> frontend: UnauthorizedException
+deactivate auth
+
+frontend --> user: 401 Unauthorized\n{\n  "statusCode": 401,\n  "message": "Unauthorized",\n  "error": "Unauthorized"\n}
+deactivate frontend
+
+== Caso de Error: Usuario No Encontrado ==
+
+user -> frontend: GET /me/profile\n(Token válido pero usuario eliminado)
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth --> frontend: Token válido (user.id = 999)
+deactivate auth
+
+frontend -> controller: GET /me/profile
+activate controller
+
+controller -> service: getProfile(999)
+activate service
+
+service -> model: findByPk(999, {include: facultad})
+activate model
+model -> db: SELECT * FROM usuarios WHERE id = 999
+activate db
+db --> model: null (usuario no existe)
+deactivate db
+model --> service: null
+deactivate model
+
+service -> service: throw NotFoundException
+service --> controller: ❌ Usuario con ID 999 no encontrado
+deactivate service
+
+controller --> frontend: 404 Not Found\n{\n  "statusCode": 404,\n  "message": "Usuario con ID 999 no encontrado",\n  "error": "Not Found"\n}
+deactivate controller
+
+frontend --> user: ❌ Error: Usuario no encontrado
+deactivate frontend
+
+== Caso de Error: Usuario Inactivo ==
+
+user -> frontend: GET /me/profile\n(Token válido, usuario inactivo)
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth -> auth: Durante validación JWT Strategy
+auth -> auth: ❌ usuario.estadoActivo = false
+auth --> frontend: UnauthorizedException\n"Token no válido o usuario inactivo"
+deactivate auth
+
+frontend --> user: 401 Unauthorized\n{\n  "statusCode": 401,\n  "message": "Token no válido o usuario inactivo",\n  "error": "Unauthorized"\n}
+deactivate frontend
+
+note right of auth
+  **Nota importante**: El JWT Strategy 
+  ya valida que el usuario esté activo,
+  por lo que usuarios inactivos no 
+  pueden pasar la autenticación.
+  
+  Esto proporciona una capa adicional
+  de seguridad automática.
+end note
+
+== Caso de Uso: Verificar Cambios Recientes ==
+
+user -> frontend: GET /me/profile\n(Después de actualizar datos)
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth --> frontend: Token válido
+deactivate auth
+
+frontend -> controller: GET /me/profile
+activate controller
+
+controller -> service: getProfile(user.id)
+activate service
+
+service -> model: findByPk con relaciones
+activate model
+model -> db: SELECT con datos actualizados
+activate db
+db --> model: Datos con updatedAt reciente
+deactivate db
+model --> service: Usuario con cambios
+deactivate model
+
+service --> controller: Perfil con updatedAt actualizado
+deactivate service
+
+controller --> frontend: 200 OK con datos frescos
+deactivate controller
+
+frontend --> user: ✅ Perfil actualizado mostrado\n🕐 updatedAt: "2024-01-25T10:15:00.000Z"
+deactivate frontend
+
+note over user, db
+  **Características de Seguridad de la HU5116:**
+  
+  🔐 **Privacidad absoluta**: Solo el usuario autenticado puede ver su perfil
+  🛡️ **Sin datos sensibles**: Contraseña y datos confidenciales excluidos
+  ✅ **Verificación automática**: JWT Strategy valida usuario activo
+  🚫 **Sin acceso cruzado**: Imposible ver perfiles de otros usuarios
+  🔄 **Datos actualizados**: Siempre obtiene información fresca de BD
+  
+  **Información incluida en el perfil:**
+  • Datos personales básicos (nombres, apellidos, cédula, correo)
+  • Rol y estado de la cuenta
+  • Facultad asociada (si corresponde)
+  • Fechas de auditoría (creación y última actualización)
+  
+  **Casos de uso principales:**
+  • Revisar información personal antes de cambios
+  • Verificar rol y permisos asignados
+  • Consultar facultad de pertenencia
+  • Validar estado de la cuenta
+  • Auditoría personal de datos
+end note
+
+@enduml

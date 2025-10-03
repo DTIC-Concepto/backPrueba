@@ -1,0 +1,303 @@
+@startuml diagrama-secuencia-busqueda-paginada-usuarios
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequenceParticipantBorderColor #2E5C8B
+skinparam sequenceActorBorderColor #2E5C8B
+skinparam sequenceActorBackgroundColor #E8F4FD
+skinparam sequenceParticipantBackgroundColor #E8F4FD
+skinparam sequenceMessageTextSize 11
+skinparam sequenceActorFontSize 11
+skinparam sequenceParticipantFontSize 11
+
+title HU5099 & HU5107: Búsqueda y Paginación de Usuarios
+
+actor "Administrador" as admin
+participant "Frontend\n(Cliente)" as frontend
+participant "Auth Guard\n(JWT)" as auth
+participant "Roles Guard\n(RBAC)" as roles
+participant "UsuariosController" as controller
+participant "ValidationPipe" as validator
+participant "UsuariosService" as service
+participant "UsuarioModel\n(Sequelize)" as model
+database "PostgreSQL\nDatabase" as db
+
+== Caso Exitoso: Búsqueda con Paginación ==
+
+admin -> frontend: GET /usuarios/paginated?\nsearch=juan&page=1&limit=10
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth -> auth: Validar token y usuario activo
+auth --> frontend: Token válido
+deactivate auth
+
+frontend -> roles: Verificar permisos
+activate roles
+roles -> roles: Validar rol ADMINISTRADOR
+roles --> frontend: Permisos válidos
+deactivate roles
+
+frontend -> controller: GET /usuarios/paginated
+activate controller
+
+controller -> validator: Validar SearchPaginatedUsuarioDto
+activate validator
+validator -> validator: @IsOptional() search\n@Type() page, limit\n@Min(1) page\n@Max(50) limit
+validator --> controller: ✅ Parámetros válidos
+deactivate validator
+
+controller -> service: findAllPaginated(searchDto)
+activate service
+
+service -> service: Construir whereClause para búsqueda
+service -> service: search="juan" → OR conditions:\n- correo ILIKE '%juan%'\n- nombres ILIKE '%juan%'\n- apellidos ILIKE '%juan%'\n- cedula ILIKE '%juan%'
+
+service -> service: Calcular offset: (page-1) * limit = 0
+
+service -> model: findAndCountAll(whereClause, limit, offset)
+activate model
+model -> db: SELECT COUNT(*) FROM usuarios\nWHERE (correo ILIKE '%juan%' OR nombres ILIKE '%juan%'\nOR apellidos ILIKE '%juan%' OR cedula ILIKE '%juan%')
+activate db
+db --> model: count = 15
+deactivate db
+
+model -> db: SELECT u.*, f.id, f.nombre, f.codigo\nFROM usuarios u\nLEFT JOIN facultades f ON u.facultadId = f.id\nWHERE (correo ILIKE '%juan%' OR nombres ILIKE '%juan%'\nOR apellidos ILIKE '%juan%' OR cedula ILIKE '%juan%')\nORDER BY u.apellidos ASC, u.nombres ASC\nLIMIT 10 OFFSET 0
+activate db
+db --> model: 10 usuarios encontrados
+deactivate db
+model --> service: {count: 15, rows: [usuarios]}
+deactivate model
+
+service -> service: Calcular metadatos:\n- totalPages = ceil(15/10) = 2\n- hasNextPage = 1 < 2 = true\n- hasPreviousPage = 1 > 1 = false
+
+service --> controller: UsuarioPaginatedResponseDto\n{\n  data: [10 usuarios],\n  meta: {\n    currentPage: 1,\n    pageSize: 10,\n    totalItems: 15,\n    totalPages: 2,\n    hasNextPage: true,\n    hasPreviousPage: false,\n    searchTerm: "juan"\n  }\n}
+deactivate service
+
+controller --> frontend: 200 OK + respuesta paginada
+deactivate controller
+
+frontend --> admin: ✅ 10 usuarios encontrados (página 1 de 2)
+deactivate frontend
+
+== Caso Exitoso: Listado Completo Paginado (Sin Búsqueda) ==
+
+admin -> frontend: GET /usuarios/paginated?\npage=2&limit=5
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth --> frontend: Token válido
+deactivate auth
+
+frontend -> roles: Verificar permisos
+activate roles
+roles --> frontend: Permisos válidos
+deactivate roles
+
+frontend -> controller: GET /usuarios/paginated
+activate controller
+
+controller -> validator: Validar parámetros
+activate validator
+validator --> controller: Parámetros válidos
+deactivate validator
+
+controller -> service: findAllPaginated({page: 2, limit: 5})
+activate service
+
+service -> service: No hay search → whereClause = {} (todos los usuarios)
+service -> service: offset = (2-1) * 5 = 5
+
+service -> model: findAndCountAll({}, limit=5, offset=5)
+activate model
+model -> db: SELECT COUNT(*) FROM usuarios
+activate db
+db --> model: count = 23
+deactivate db
+
+model -> db: SELECT u.*, f.id, f.nombre, f.codigo\nFROM usuarios u\nLEFT JOIN facultades f ON u.facultadId = f.id\nORDER BY u.apellidos ASC, u.nombres ASC\nLIMIT 5 OFFSET 5
+activate db
+db --> model: 5 usuarios (registros 6-10)
+deactivate db
+model --> service: {count: 23, rows: [5 usuarios]}
+deactivate model
+
+service -> service: Calcular metadatos:\n- totalPages = ceil(23/5) = 5\n- hasNextPage = 2 < 5 = true\n- hasPreviousPage = 2 > 1 = true
+
+service --> controller: Respuesta paginada completa
+deactivate service
+
+controller --> frontend: 200 OK
+deactivate controller
+
+frontend --> admin: ✅ 5 usuarios (página 2 de 5)
+deactivate frontend
+
+== Caso Sin Resultados: Búsqueda Sin Coincidencias ==
+
+admin -> frontend: GET /usuarios/paginated?\nsearch=usuarionoexiste&page=1&limit=10
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth --> frontend: Token válido
+deactivate auth
+
+frontend -> roles: Verificar permisos
+activate roles
+roles --> frontend: Permisos válidos
+deactivate roles
+
+frontend -> controller: GET /usuarios/paginated
+activate controller
+
+controller -> validator: Validar parámetros
+activate validator
+validator --> controller: Parámetros válidos
+deactivate validator
+
+controller -> service: findAllPaginated(searchDto)
+activate service
+
+service -> service: search="usuarionoexiste" → whereClause con OR
+
+service -> model: findAndCountAll(whereClause, limit, offset)
+activate model
+model -> db: SELECT COUNT(*) FROM usuarios\nWHERE (correo ILIKE '%usuarionoexiste%' OR ...)
+activate db
+db --> model: count = 0
+deactivate db
+
+model -> db: SELECT ... LIMIT 10 OFFSET 0
+activate db
+db --> model: [] (sin resultados)
+deactivate db
+model --> service: {count: 0, rows: []}
+deactivate model
+
+service -> service: Calcular metadatos:\n- totalPages = ceil(0/10) = 0\n- hasNextPage = false\n- hasPreviousPage = false
+
+service --> controller: {\n  data: [],\n  meta: {\n    currentPage: 1,\n    pageSize: 10,\n    totalItems: 0,\n    totalPages: 0,\n    hasNextPage: false,\n    hasPreviousPage: false,\n    searchTerm: "usuarionoexiste"\n  }\n}
+deactivate service
+
+controller --> frontend: 200 OK (lista vacía)
+deactivate controller
+
+frontend --> admin: ✅ Sin resultados encontrados
+deactivate frontend
+
+== Caso de Error: Parámetros de Paginación Inválidos ==
+
+admin -> frontend: GET /usuarios/paginated?\npage=0&limit=100
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth --> frontend: Token válido
+deactivate auth
+
+frontend -> roles: Verificar permisos
+activate roles
+roles --> frontend: Permisos válidos
+deactivate roles
+
+frontend -> controller: GET /usuarios/paginated
+activate controller
+
+controller -> validator: Validar SearchPaginatedUsuarioDto
+activate validator
+validator -> validator: @Min(1) page → ❌ page=0 inválido
+validator -> validator: @Max(50) limit → ❌ limit=100 inválido
+validator --> controller: ValidationError
+deactivate validator
+
+controller --> frontend: 400 Bad Request\n{\n  "statusCode": 400,\n  "message": [\n    "La página debe ser mayor a 0",\n    "El límite no puede ser mayor a 50"\n  ],\n  "error": "Bad Request"\n}
+deactivate controller
+
+frontend --> admin: ❌ Error: Parámetros inválidos
+deactivate frontend
+
+== Caso de Error: Sin Permisos ==
+
+admin -> frontend: GET /usuarios/paginated?\nsearch=juan&page=1&limit=10\n(Usuario sin rol ADMINISTRADOR)
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth --> frontend: Token válido
+deactivate auth
+
+frontend -> roles: Verificar permisos
+activate roles
+roles -> roles: Usuario no tiene rol ADMINISTRADOR
+roles --> frontend: ❌ Acceso denegado
+deactivate roles
+
+frontend --> admin: 403 Forbidden\n{\n  "statusCode": 403,\n  "message": "Forbidden resource",\n  "error": "Forbidden"\n}
+deactivate frontend
+
+== Caso Búsqueda por Cédula Específica ==
+
+admin -> frontend: GET /usuarios/paginated?\nsearch=1234567890&page=1&limit=10
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth --> frontend: Token válido
+deactivate auth
+
+frontend -> roles: Verificar permisos
+activate roles
+roles --> frontend: Permisos válidos
+deactivate roles
+
+frontend -> controller: GET /usuarios/paginated
+activate controller
+
+controller -> service: findAllPaginated(searchDto)
+activate service
+
+service -> service: search="1234567890" → buscar en cédula principalmente
+
+service -> model: findAndCountAll con OR condition
+activate model
+model -> db: SELECT COUNT(*) FROM usuarios\nWHERE (correo ILIKE '%1234567890%' OR nombres ILIKE '%1234567890%'\nOR apellidos ILIKE '%1234567890%' OR cedula ILIKE '%1234567890%')
+activate db
+db --> model: count = 1 (coincidencia exacta en cédula)
+deactivate db
+
+model --> service: 1 usuario encontrado
+deactivate model
+service --> controller: Usuario específico encontrado
+deactivate service
+
+controller --> frontend: 200 OK con 1 resultado
+deactivate controller
+
+frontend --> admin: ✅ Usuario encontrado por cédula
+deactivate frontend
+
+note over admin, db
+  **Características Implementadas:**
+  
+  **HU5099 - Búsqueda por Palabra Clave:**
+  🔍 **Campos de búsqueda**: correo, nombres, apellidos, cédula
+  🎯 **Búsqueda inteligente**: Una palabra busca en todos los campos
+  📝 **Tolerante**: Ignora espacios y no distingue mayúsculas/minúsculas
+  ✅ **Sin errores**: Lista vacía cuando no hay coincidencias
+  
+  **HU5107 - Paginación:**
+  📄 **Control flexible**: Página y tamaño configurables
+  📊 **Límites seguros**: Máximo 50 elementos por página
+  📈 **Metadatos completos**: Total de elementos, páginas, navegación
+  🔄 **Navegación intuitiva**: Indicadores de página anterior/siguiente
+  
+  **Funcionalidades adicionales:**
+  🔗 **Relaciones**: Incluye datos de facultad asociada
+  📋 **Ordenamiento**: Por apellidos y nombres alfabéticamente
+  🛡️ **Seguridad**: Solo administradores pueden acceder
+  🎨 **Documentación**: Swagger con ejemplos detallados
+end note
+
+@enduml

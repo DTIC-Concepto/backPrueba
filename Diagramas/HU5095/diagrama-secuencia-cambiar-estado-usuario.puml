@@ -1,0 +1,199 @@
+@startuml diagrama-secuencia-cambiar-estado-usuario
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequenceParticipantBorderColor #2E5C8B
+skinparam sequenceActorBorderColor #2E5C8B
+skinparam sequenceActorBackgroundColor #E8F4FD
+skinparam sequenceParticipantBackgroundColor #E8F4FD
+skinparam sequenceMessageTextSize 11
+skinparam sequenceActorFontSize 11
+skinparam sequenceParticipantFontSize 11
+
+title HU5095: Cambiar Estado de Usuario (Activar/Desactivar)
+
+actor "Administrador" as admin
+participant "Frontend\n(Cliente)" as frontend
+participant "Auth Guard\n(JWT)" as auth
+participant "Roles Guard\n(RBAC)" as roles
+participant "UsuariosController" as controller
+participant "ValidationPipe" as validator
+participant "UsuariosService" as service
+participant "UsuarioModel\n(Sequelize)" as model
+database "PostgreSQL\nDatabase" as db
+
+== Caso Exitoso: Cambiar Estado de Usuario ==
+
+admin -> frontend: PUT /usuarios/5/status\n{"estadoActivo": false}
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth -> auth: Validar token
+auth --> frontend: Token válido
+deactivate auth
+
+frontend -> roles: Verificar permisos
+activate roles
+roles -> roles: Validar rol ADMINISTRADOR
+roles --> frontend: Permisos válidos
+deactivate roles
+
+frontend -> controller: PUT /usuarios/5/status\n{"estadoActivo": false}
+activate controller
+
+controller -> validator: Validar UpdateStatusUsuarioDto
+activate validator
+validator -> validator: @IsBoolean() estadoActivo\n@IsNotEmpty() estadoActivo
+validator --> controller: Datos válidos
+deactivate validator
+
+controller -> service: updateStatus(5, {estadoActivo: false})
+activate service
+
+service -> model: findByPk(5)
+activate model
+model -> db: SELECT * FROM usuarios WHERE id = 5
+activate db
+db --> model: Usuario encontrado
+deactivate db
+model --> service: UsuarioModel instance
+deactivate model
+
+service -> model: usuario.update({estadoActivo: false})
+activate model
+model -> db: UPDATE usuarios SET estadoActivo = false\nWHERE id = 5
+activate db
+db --> model: Usuario actualizado
+deactivate db
+model --> service: Actualización exitosa
+deactivate model
+
+service -> model: usuario.reload()
+activate model
+model -> db: SELECT * FROM usuarios WHERE id = 5
+activate db
+db --> model: Usuario con nuevo estado
+deactivate db
+model --> service: Usuario actualizado
+deactivate model
+
+service --> controller: UsuarioModel actualizado
+deactivate service
+
+controller --> frontend: 200 OK\n{\n  "id": 5,\n  "nombres": "Carlos Eduardo",\n  "apellidos": "Rodríguez Silva",\n  "estadoActivo": false,\n  ...\n}
+deactivate controller
+
+frontend --> admin: ✅ Usuario desactivado exitosamente
+deactivate frontend
+
+== Caso de Error: Usuario No Encontrado ==
+
+admin -> frontend: PUT /usuarios/999/status\n{"estadoActivo": true}
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth --> frontend: Token válido
+deactivate auth
+
+frontend -> roles: Verificar permisos
+activate roles
+roles --> frontend: Permisos válidos
+deactivate roles
+
+frontend -> controller: PUT /usuarios/999/status
+activate controller
+
+controller -> validator: Validar datos
+activate validator
+validator --> controller: Datos válidos
+deactivate validator
+
+controller -> service: updateStatus(999, {estadoActivo: true})
+activate service
+
+service -> model: findByPk(999)
+activate model
+model -> db: SELECT * FROM usuarios WHERE id = 999
+activate db
+db --> model: null (no encontrado)
+deactivate db
+model --> service: null
+deactivate model
+
+service -> service: throw NotFoundException
+service --> controller: ❌ Usuario con ID 999 no encontrado
+deactivate service
+
+controller --> frontend: 404 Not Found\n{\n  "statusCode": 404,\n  "message": "Usuario con ID 999 no encontrado",\n  "error": "Not Found"\n}
+deactivate controller
+
+frontend --> admin: ❌ Error: Usuario no encontrado
+deactivate frontend
+
+== Caso de Error: Datos Inválidos ==
+
+admin -> frontend: PUT /usuarios/5/status\n{"estadoActivo": "invalid"}
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth --> frontend: Token válido
+deactivate auth
+
+frontend -> roles: Verificar permisos
+activate roles
+roles --> frontend: Permisos válidos
+deactivate roles
+
+frontend -> controller: PUT /usuarios/5/status\n{"estadoActivo": "invalid"}
+activate controller
+
+controller -> validator: Validar UpdateStatusUsuarioDto
+activate validator
+validator -> validator: @IsBoolean() estadoActivo\n❌ "invalid" no es boolean
+validator --> controller: ValidationError
+deactivate validator
+
+controller --> frontend: 400 Bad Request\n{\n  "statusCode": 400,\n  "message": ["El estado activo debe ser un valor booleano"],\n  "error": "Bad Request"\n}
+deactivate controller
+
+frontend --> admin: ❌ Error: Datos inválidos
+deactivate frontend
+
+== Caso de Error: Sin Permisos ==
+
+admin -> frontend: PUT /usuarios/5/status\n(Sin rol ADMINISTRADOR)
+activate frontend
+
+frontend -> auth: Verificar token JWT
+activate auth
+auth --> frontend: Token válido
+deactivate auth
+
+frontend -> roles: Verificar permisos
+activate roles
+roles -> roles: Usuario no tiene rol ADMINISTRADOR
+roles --> frontend: ❌ Acceso denegado
+deactivate roles
+
+frontend --> admin: 403 Forbidden\n{\n  "statusCode": 403,\n  "message": "Forbidden resource",\n  "error": "Forbidden"\n}
+deactivate frontend
+
+note over admin, db
+  **Características de la HU5095:**
+  
+  🔐 **Seguridad**: Solo administradores pueden cambiar estados
+  ✅ **Validación**: Estado debe ser boolean obligatorio
+  🔍 **Verificación**: Usuario debe existir antes de actualizar
+  📊 **Auditoría**: Se registra fecha de actualización automáticamente
+  🔄 **Consistencia**: Se recarga el usuario para obtener datos actualizados
+  
+  **Casos de uso principales:**
+  • Desactivar usuarios que ya no pertenecen a la institución
+  • Activar usuarios que regresan o fueron dados de baja temporalmente
+  • Gestión de acceso granular sin eliminar datos históricos
+  • Control de sesiones activas mediante estado de usuario
+end note
+
+@enduml

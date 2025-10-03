@@ -15,11 +15,26 @@ class UserResponseDto {
   correo: string;
 
   @ApiProperty({ 
-    description: 'Rol del usuario en el sistema', 
+    description: 'Rol activo en la sesión actual', 
     enum: RolEnum,
     example: RolEnum.ADMINISTRADOR 
   })
   rol: RolEnum;
+
+  @ApiProperty({ 
+    description: 'Rol principal del usuario (rol original)', 
+    enum: RolEnum,
+    example: RolEnum.PROFESOR 
+  })
+  rolPrincipal: RolEnum;
+
+  @ApiProperty({ 
+    description: 'Lista de todos los roles disponibles para el usuario',
+    enum: RolEnum,
+    isArray: true,
+    example: [RolEnum.PROFESOR, RolEnum.COORDINADOR]
+  })
+  rolesDisponibles: RolEnum[];
 
   @ApiProperty({ description: 'Estado activo del usuario', example: true })
   estadoActivo: boolean;
