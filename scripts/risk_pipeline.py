@@ -12,7 +12,6 @@ from email.message import EmailMessage
 import nltk
 from nltk.corpus import stopwords
 
-
 # -----------------------------
 # Configuración MLflow
 # -----------------------------
@@ -38,8 +37,18 @@ def get_latest_commits(limit=11):
     url = f"https://api.github.com/repos/{OWNER}/{REPO}/commits"
     r = requests.get(url, headers=headers, params={"per_page": limit})
     if r.status_code == 200:
-        # Devolver lista de diccionarios con sha y mensaje
-        return [{"sha": c["sha"], "message": c["commit"]["message"].split("\n")[0]} for c in r.json()]
+        commits = []
+        for c in r.json():
+            full_message = c["commit"]["message"]
+            title = full_message.split("\n")[0]
+            description = "\n".join(full_message.split("\n")[1:]).strip()
+            commits.append({
+                "sha": c["sha"],
+                "title": title,
+                "description": description,
+                "message": full_message
+            })
+        return commits
     return []
 
 def get_sonar_metrics():
@@ -60,11 +69,9 @@ def get_github_commit_stats(commit_sha):
         stats = r.json()["stats"]
         return stats["total"], stats["additions"], stats["deletions"]
     return 0, 0, 0
+
 def detect_commit_type(message):
-    """
-    Detecta si un commit es: bugfix, feature o refactor.
-    Basado en palabras clave simples.
-    """
+    """Detecta si un commit es: bugfix, feature o refactor."""
     message = message.lower()
     stop_words = set(stopwords.words("english"))
     words = [w for w in message.split() if w not in stop_words]
@@ -119,22 +126,24 @@ def main():
         print("❌ No se pudieron obtener commits.")
         sys.exit(1)
 
-    latest_commit = commits[0]  # dict con sha y message
+    latest_commit = commits[0]
+    latest_title = latest_commit["title"]
+    latest_description = latest_commit["description"] if latest_commit["description"] else "(sin descripción)"
 
     records = []
     sonar_metrics = get_sonar_metrics()
-    # -----------------------------
+
     for c in commits:
         sha, message = c["sha"], c["message"]
         total_loc, additions, deletions = get_github_commit_stats(sha)
-        commit_type = detect_commit_type(message)  # <-- NLP aquí
-        record = {**sonar_metrics, 
-                "loc_changed": total_loc, 
-                "additions": additions, 
-                "deletions": deletions, 
-                "commit": sha,
-                "message": message,
-                "commit_type": commit_type}  # <-- guardamos tipo
+        commit_type = detect_commit_type(message)
+        record = {**sonar_metrics,
+                  "loc_changed": total_loc,
+                  "additions": additions,
+                  "deletions": deletions,
+                  "commit": sha,
+                  "message": message,
+                  "commit_type": commit_type}
         records.append(record)
     df = pd.DataFrame(records)
 
@@ -146,17 +155,15 @@ def main():
     df_scaled = df_scaled.sort_values("risk_score", ascending=False)
 
     df_scaled["risk_label"] = (df_scaled["risk_score"] > 2.5).astype(int)
-
     df_scaled[metrics] = df_scaled[metrics].astype("float64")
 
-    # ➡ Convertir explícitamente a float64 para evitar warning MLflow
     X = df_scaled[metrics].astype("float64")
     y = df_scaled["risk_label"]
 
     clf = DummyClassifier(strategy="most_frequent")
     clf.fit(X, y)
 
-    input_example = X.iloc[:1].astype("float64")  # Ejemplo de entrada para MLflow
+    input_example = X.iloc[:1].astype("float64")
     if mlflow.active_run():
         mlflow.end_run()
     with mlflow.start_run():
@@ -173,8 +180,9 @@ def main():
         df_scaled.to_csv("risk_scores.csv", index=False)
         mlflow.log_artifact("risk_scores.csv", artifact_path="data")
     mlflow.end_run()
+
     # -----------------------------
-    # Gráfico de riesgo de commits
+    # Gráfico de riesgo
     # -----------------------------
     plt.figure(figsize=(10, 6))
     colors = ["red" if c == latest_commit["sha"] else "steelblue" for c in df_scaled["commit"]]
@@ -190,7 +198,7 @@ def main():
     plt.show()
 
     # -----------------------------
-    # Reporte acumulado de deuda técnica
+    # Reporte deuda técnica
     # -----------------------------
     df_scaled["deuda_tecnica"] = df_scaled["code_smells"] + df_scaled["complexity"]
     df_scaled["deuda_acumulada"] = df_scaled["deuda_tecnica"].cumsum()
@@ -200,7 +208,7 @@ def main():
     plt.xticks(rotation=45, ha="right")
     plt.xlabel("Commit Message")
     plt.ylabel("Deuda técnica acumulada")
-    plt.title("Evolución acumulada de la deuda técnica (Code Smells + Complejidad)")
+    plt.title("Evolución acumulada de la deuda técnica")
     plt.tight_layout()
     debt_path = "technical_debt_report.png"
     plt.savefig(debt_path)
@@ -208,7 +216,7 @@ def main():
     plt.show()
 
     # -----------------------------
-    # Reporte de líneas añadidas vs eliminadas
+    # Reporte líneas añadidas vs eliminadas
     # -----------------------------
     plt.figure(figsize=(10, 6))
     plt.bar(df["message"], df["additions"], color="green", label="Additions")
@@ -224,14 +232,10 @@ def main():
     mlflow.log_artifact(changes_path, artifact_path="figures")
     plt.show()
 
-    print(f"✅ Pipeline completado. Puntaje último commit ({latest_commit['message'][:50]}...): {latest_risk:.2f}")
-
-
-     # -----------------------------
-    # Reporte de Tipo de Commit
+    # -----------------------------
+    # Reporte tipo de commit
     # -----------------------------
     commit_type_counts = df_scaled["commit_type"].value_counts()
-
     plt.figure(figsize=(8, 5))
     commit_type_counts.plot(kind="bar", color=["red", "green", "blue", "gray"])
     plt.xlabel("Tipo de commit")
@@ -243,15 +247,27 @@ def main():
     plt.show()
 
     # -----------------------------
-    # Enviar correo con todos los reportes
+    # Enviar correo con título y descripción
     # -----------------------------
+    body = (
+        f"Título del commit: {latest_title}\n\n"
+        f"Descripción:\n{latest_description}\n\n"
+        f"Puntaje de riesgo: {latest_risk:.2f}\n"
+        "Adjunto CSV, gráfico de riesgo, reporte de deuda técnica y cambios de líneas."
+    )
+
     send_email_with_artifacts(
         to_email="erik.gaibor@epn.edu.ec",
-        subject=f"Reporte de riesgo commit {latest_commit['message'][:50]}...",
-        body=f"Puntaje de riesgo: {latest_risk:.2f}\nAdjunto CSV, gráfico de riesgo, reporte de deuda técnica y cambios de líneas.",
-        attachments=["risk_scores.csv", "commit_risk_report.png", "technical_debt_report.png", "additions_deletions_report.png"]
+        subject=f"Reporte de riesgo commit {latest_title[:50]}...",
+        body=body,
+        attachments=[
+            "risk_scores.csv",
+            "commit_risk_report.png",
+            "technical_debt_report.png",
+            "additions_deletions_report.png"
+        ]
     )
-    
+
     if latest_risk > 2.5:
         print("❌ Riesgo muy alto, no se permite el despliegue.")
         sys.exit(1)
