@@ -66,9 +66,6 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements.txt
-      
-      - name: Download NLTK stopwords
-        run: python -m nltk.downloader stopwords
 
       - name: Run report generation
         run: python scripts/report_commit.py
