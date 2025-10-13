@@ -3,7 +3,6 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - dev/jose
       - main
   pull_request:
     types: [opened, synchronize, reopened]
