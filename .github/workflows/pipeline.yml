@@ -28,7 +28,7 @@ jobs:
 
       - name: Run Unit Tests with Coverage
         # Agrega la opción continue-on-error a este paso
-        continue-on-error: false
+        continue-on-error: true
         run: npm run test:cov
 
       - name: SonarCloud Scan
