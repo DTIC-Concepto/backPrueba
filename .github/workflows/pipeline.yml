@@ -3,6 +3,7 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
+      - dev/jose
       - main
   pull_request:
     types: [opened, synchronize, reopened]
@@ -41,7 +42,7 @@ jobs:
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
 
-  risk-analysis:
+  informe-sonar:
     needs: ci
     runs-on: ubuntu-latest
     if: success()
@@ -53,7 +54,7 @@ jobs:
       OWNER: ${{ secrets.OWNER }}
       REPO: ${{ secrets.REPO }}
       SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
-      MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
@@ -69,8 +70,8 @@ jobs:
       - name: Download NLTK stopwords
         run: python -m nltk.downloader stopwords
 
-      - name: Run risk analysis
-        run: python scripts/risk_pipeline.py
+      - name: Run report generation
+        run: python scripts/report_commit.py
 
   deploy:
     name: Deploy to Railway
