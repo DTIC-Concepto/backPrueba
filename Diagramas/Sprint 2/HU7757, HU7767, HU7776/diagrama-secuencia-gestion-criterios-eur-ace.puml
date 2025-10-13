@@ -1,0 +1,143 @@
+@startuml HU7757, HU7767, HU7776 - Gestión Criterios EUR-ACE
+
+title HU7757, HU7767, HU7776: Visualizar, Buscar y Paginar Criterios EUR-ACE
+
+actor "Miembro CEI" as CEI
+participant "Frontend" as FE
+participant "JWT Guard" as JWT
+participant "Roles Guard" as RG
+participant "EurAceController" as EC
+participant "EurAceService" as ES
+participant "Sequelize ORM" as ORM
+database "PostgreSQL" as DB
+
+== HU7757: Visualizar Criterios EUR-ACE ==
+
+CEI -> FE: Accede a la vista "Criterios EUR-ACE"
+activate FE
+
+FE -> EC: GET /eur-ace-criteria
+activate EC
+
+EC -> JWT: Validar token JWT
+activate JWT
+JWT --> EC: Token válido
+deactivate JWT
+
+EC -> RG: Verificar rol CEI
+activate RG
+RG --> EC: Rol CEI autorizado
+deactivate RG
+
+EC -> ES: findAllWithFiltersAndPagination(defaultFilters)
+activate ES
+
+ES -> ORM: findAndCountAll({order: [['codigo', 'ASC']], limit: 10, offset: 0})
+activate ORM
+ORM -> DB: SELECT * FROM eur_ace_criteria\nORDER BY codigo ASC\nLIMIT 10 OFFSET 0
+activate DB
+DB --> ORM: Lista de criterios EUR-ACE
+deactivate DB
+ORM --> ES: {rows: EurAceModel[], count: total}
+deactivate ORM
+
+ES --> EC: {data, total, page: 1, limit: 10, totalPages: 2, hasPrevious: false, hasNext: true}
+deactivate ES
+
+EC --> FE: 200 OK - Lista paginada de criterios
+deactivate EC
+
+FE -> FE: Renderizar tabla con paginación inicial
+
+== HU7767: Buscar Criterios EUR-ACE ==
+
+FE -> FE: Usuario ingresa término de búsqueda\n"C01" en campo de búsqueda
+FE -> EC: GET /eur-ace-criteria?search=C01
+activate EC
+
+EC -> JWT: Validar token JWT
+JWT --> EC: Token válido
+
+EC -> RG: Verificar rol CEI
+RG --> EC: Rol CEI autorizado
+
+EC -> ES: findAllWithFiltersAndPagination({search: "C01"})
+activate ES
+
+ES -> ORM: findAndCountAll({\n  where: {\n    [Op.or]: [\n      {codigo: {[Op.iLike]: '%C01%'}},\n      {descripcion: {[Op.iLike]: '%C01%'}}\n    ]\n  },\n  order: [['codigo', 'ASC']]\n})
+activate ORM
+ORM -> DB: SELECT * FROM eur_ace_criteria\nWHERE codigo ILIKE '%C01%'\nOR descripcion ILIKE '%C01%'\nORDER BY codigo ASC
+activate DB
+DB --> ORM: Criterios filtrados por búsqueda
+deactivate DB
+ORM --> ES: {rows: EurAceModel[], count: filteredTotal}
+deactivate ORM
+
+ES --> EC: {data: criteriosFiltrados, total: 3, page: 1, limit: 10}
+deactivate ES
+
+EC --> FE: 200 OK - Resultados de búsqueda
+deactivate EC
+
+FE -> FE: Actualizar tabla con resultados filtrados
+
+== HU7776: Paginar Criterios EUR-ACE ==
+
+FE -> FE: Usuario hace clic en "Página 2"
+FE -> EC: GET /eur-ace-criteria?page=2&limit=10
+activate EC
+
+EC -> JWT: Validar token JWT
+JWT --> EC: Token válido
+
+EC -> RG: Verificar rol CEI
+RG --> EC: Rol CEI autorizado
+
+EC -> ES: findAllWithFiltersAndPagination({page: 2, limit: 10})
+activate ES
+
+ES -> ES: Calcular offset = (2-1) * 10 = 10
+
+ES -> ORM: findAndCountAll({\n  order: [['codigo', 'ASC']],\n  limit: 10,\n  offset: 10\n})
+activate ORM
+ORM -> DB: SELECT * FROM eur_ace_criteria\nORDER BY codigo ASC\nLIMIT 10 OFFSET 10
+activate DB
+DB --> ORM: Segunda página de criterios
+deactivate DB
+ORM --> ES: {rows: EurAceModel[], count: totalGeneral}
+deactivate ORM
+
+ES --> EC: {\n  data: criteriosPagina2,\n  total: 25,\n  page: 2,\n  limit: 10,\n  totalPages: 3,\n  hasPrevious: true,\n  hasNext: true\n}
+deactivate ES
+
+EC --> FE: 200 OK - Segunda página
+deactivate EC
+
+FE -> FE: Actualizar tabla y controles de paginación
+FE --> CEI: ✅ Criterios EUR-ACE con navegación completa
+
+deactivate FE
+
+note right of CEI
+  **Criterios de Aceptación Implementados:**
+  
+  **HU7757 - Visualizar:**
+  ✅ Endpoint GET /eur-ace-criteria disponible
+  ✅ Lista de criterios con ID y descripción
+  ✅ Solo accesible para rol CEI
+  ✅ Ordenados por código ascendente
+  
+  **HU7767 - Buscar:**
+  ✅ Parámetro ?search implementado
+  ✅ Búsqueda en código y descripción
+  ✅ Filtrado case-insensitive (iLike)
+  ✅ Mantiene ordenamiento por código
+  
+  **HU7776 - Paginar:**
+  ✅ Parámetros ?page y ?limit
+  ✅ Información de paginación completa
+  ✅ Navegación hasPrevious/hasNext
+  ✅ Cálculo correcto de totalPages
+end note
+
+@enduml

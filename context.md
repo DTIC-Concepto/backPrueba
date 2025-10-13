@@ -1,7 +1,13 @@
 # Contexto del Sistema: Poliacredita
 
 ## Descripción General
-Poliacredita es un sistema de gestión académica para la Escuela Politécnica Nacional que asegura la trazabilidad completa de la formación profesional y la alineación con los estándares de acreditación EUR-ACE. Permite mapear resultados de aprendizaje de carreras y asignaturas con criterios europeos y objetivos de perfil profesional, garantizando evidencia de cumplimiento.
+El sello EUR-ACE es una etiqueta de calidad europea que certifica que un programa de estudios de ingeniería cumple con estándares de excelencia y los requisitos profesionales del ámbito europeo. Otorga una garantía internacional de la formación de un ingeniero y facilita la movilidad académica y profesional al reconocer las competencias adquiridas.
+Los objetivos del sistema de acreditación EUR-ACE son certificar la calidad de las carreras de ingeniería en Europa y el mundo, garantizando que cumplen estándares internacionales y asegurando que los titulados poseen conocimientos, habilidades técnicas y competencias profesionales para la empleabilidad. Además, busca facilitar la movilidad académica y profesional de estudiantes y docentes, fortalecer alianzas globales y mejorar la transparencia y el reconocimiento de las titulaciones en el ámbito internacional.
+La Escuela Politécnica Nacional EPN es una universidad pública, de grado y posgrado, ubicada en Quito, Ecuador. Reconocida por la investigación y la educación en ciencias básicas, ingenierías y tecnología, ofrece programas doctorales, de maestría y de grado.
+La Escuela Politécnica Nacional consta de 9 facultades que albergan 6 carreras de tecnología superior, 24 carreras de pregrado, 22 maestrías y 6 doctorados en postgrado. Dichas especialidades pertenecen al campo del conocimiento de las ciencias, ingeniería y formación tecnológica.
+Las carreras de grado, carreras de tecnología superior y carreras de pregrado se conocen como “carreras”. Para EUR-ACE son carreras de ingeniería. EUR-ACE certifica programas de estudios de ingeniería o “carreras de ingeniería” para el caso de Ecuador.
+Cada carrera tiene una malla curricular donde están todas las asignaturas que los estudiantes deben cursar. Cada asignatura tiene su resultados de aprendizaje de la asignatura RAA. Cada carrera tiene resultados de aprendizaje de la carrera RA.
+En una matriz RA-RAA se relacionan los RAA con los RA. En otra matriz EURACE-RA se relacionan los RA con los objetivos EUR-ACE. Con las matrices anteriores podemos definir como las asignaturas ayudan a cumplir los objetivos EUR-ACE.
 
 ## Entidades Principales
 
@@ -33,7 +39,7 @@ Poliacredita es un sistema de gestión académica para la Escuela Politécnica N
 - **Descripción**: agrupación temática de asignaturas
 
 ### ResultadoAprendizaje (RA)
-- **Atributos**: código auto-generado (CODIGO_CARRERA-CODIGO_RA), descripción, tipo (GENERAL/ESPECÍFICO)
+- **Atributos**: código, descripción, tipo (GENERAL/ESPECÍFICO)
 - **Relaciones**: pertenece a Carrera, se relaciona con RAA, EURACE y OPP
 
 ### RAA (Resultado de Aprendizaje de Asignatura)
@@ -45,7 +51,7 @@ Poliacredita es un sistema de gestión académica para la Escuela Politécnica N
 - **Relaciones**: many-to-many con RA (justificación)
 
 ### OPP (Objetivo de Perfil Profesional)
-- **Atributos**: código auto-generado, descripción
+- **Atributos**: código, descripción
 - **Relaciones**: Pertenece a Carrera, se relaciona con RA (many-to-many)
 
 ### Relaciones (matrices de trazabilidad)
@@ -63,20 +69,8 @@ Poliacredita es un sistema de gestión académica para la Escuela Politécnica N
 
 
 
-## Guia
-- Crear modulo para cada ENTIDAD encontrada y dentro de ese modulo poner el servicio, controlador, etc
-
-### Convenciones
-
-- **Carpeta**: kebab-case
-- **Modelos Sequelize**: PascalCase + sufijo Model (ej: `ResultadoAprendizajeModel`)
-- **DTOs**: `CreateXxxDto`, `UpdateXxxDto`, `FilterXxxDto`
-- Un solo controller y un solo service por feature (no crear uno por cada tarea)
-- Endpoints REST en controller ↔ métodos en service ↔ modelos/DTOs
 
 ## Características Importantes
-
-- Códigos auto-generados 
 - Validaciones de negocio en entidades y relaciones
 - Soft deletes en Asignaturas
 - Índices únicos en tablas many-to-many
@@ -84,9 +78,5 @@ Poliacredita es un sistema de gestión académica para la Escuela Politécnica N
 - Timestamps automáticos para auditoría
 
 
-## Restricciones
 
-- **NO** crear múltiples módulos/servicios por cada tarea
-- Persistencia obligatoria en PostgreSQL usando Sequelize
-- Si algo no es claro, generar la versión mínima viable y documentar con TODO
 

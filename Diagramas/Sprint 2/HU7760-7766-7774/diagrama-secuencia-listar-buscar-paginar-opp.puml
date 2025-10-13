@@ -1,0 +1,140 @@
+@startuml
+title Listar, Buscar y Paginar Objetivos de Programa (HU7760, HU7766, HU7774)
+subtitle Sistema de Gestión de Acreditación - Módulo OPP
+
+actor Coordinador
+participant Frontend
+participant AuthGuard as "Guard de Autenticación"
+participant RolesGuard as "Guard de Roles" 
+participant OppController
+participant OppService
+database PostgreSQL
+
+== HU7760 - Listar OPP ==
+Coordinador -> Frontend: Solicita lista de OPP
+activate Frontend
+
+Frontend -> OppController: GET /program-objectives
+activate OppController
+
+OppController -> AuthGuard: Verificar token JWT
+activate AuthGuard
+AuthGuard --> OppController: Token válido
+deactivate AuthGuard
+
+OppController -> RolesGuard: Verificar rol COORDINADOR
+activate RolesGuard  
+RolesGuard --> OppController: Rol autorizado
+deactivate RolesGuard
+
+OppController -> OppService: findAllWithFiltersAndPagination({})
+activate OppService
+
+OppService -> PostgreSQL: SELECT opps.*, carreras.nombre\nFROM opps LEFT JOIN carreras\nLIMIT 10 OFFSET 0
+activate PostgreSQL
+PostgreSQL --> OppService: Lista de OPPs (datos + total)
+deactivate PostgreSQL
+
+OppService --> OppController: {data[], total, page, limit, totalPages, hasPrevious, hasNext}
+deactivate OppService
+
+OppController --> Frontend: 200 - OppPaginatedResponseDto
+deactivate OppController
+
+Frontend --> Coordinador: Muestra lista de OPP
+deactivate Frontend
+
+== HU7766 - Buscar OPP ==
+Coordinador -> Frontend: Ingresa búsqueda "análisis"
+activate Frontend
+
+Frontend -> OppController: GET /program-objectives?search=análisis
+activate OppController
+
+OppController -> AuthGuard: Verificar token JWT
+activate AuthGuard
+AuthGuard --> OppController: Token válido
+deactivate AuthGuard
+
+OppController -> RolesGuard: Verificar rol COORDINADOR
+activate RolesGuard
+RolesGuard --> OppController: Rol autorizado
+deactivate RolesGuard
+
+OppController -> OppService: findAllWithFiltersAndPagination({search: "análisis"})
+activate OppService
+
+OppService -> PostgreSQL: SELECT opps.*, carreras.nombre\nFROM opps LEFT JOIN carreras\nWHERE opps.codigo ILIKE '%análisis%'\nOR opps.descripcion ILIKE '%análisis%'\nLIMIT 10 OFFSET 0
+activate PostgreSQL
+PostgreSQL --> OppService: OPPs filtrados
+deactivate PostgreSQL
+
+OppService --> OppController: Resultados de búsqueda
+deactivate OppService
+
+OppController --> Frontend: 200 - OPPs que coinciden con "análisis"
+deactivate OppController
+
+Frontend --> Coordinador: Muestra OPPs filtrados
+deactivate Frontend
+
+== HU7774 - Paginar OPP ==
+Coordinador -> Frontend: Solicita página 2 con 5 elementos
+activate Frontend
+
+Frontend -> OppController: GET /program-objectives?page=2&limit=5
+activate OppController
+
+OppController -> AuthGuard: Verificar token JWT
+activate AuthGuard
+AuthGuard --> OppController: Token válido
+deactivate AuthGuard
+
+OppController -> RolesGuard: Verificar rol COORDINADOR
+activate RolesGuard
+RolesGuard --> OppController: Rol autorizado
+deactivate RolesGuard
+
+OppController -> OppService: findAllWithFiltersAndPagination({page: 2, limit: 5})
+activate OppService
+
+OppService -> PostgreSQL: SELECT opps.*, carreras.nombre\nFROM opps LEFT JOIN carreras\nLIMIT 5 OFFSET 5
+activate PostgreSQL
+PostgreSQL --> OppService: OPPs de página 2
+deactivate PostgreSQL
+
+OppService --> OppController: {data[], total, page: 2, limit: 5, totalPages, hasPrevious: true, hasNext}
+deactivate OppService
+
+OppController --> Frontend: 200 - Página 2 con metadatos de paginación
+deactivate OppController
+
+Frontend --> Coordinador: Muestra página 2 con navegación
+deactivate Frontend
+
+== Caso de Error - Acceso Denegado ==
+note over Coordinador: Intenta acceder un usuario sin rol COORDINADOR
+
+Coordinador -> Frontend: Solicita lista OPP (usuario sin permisos)
+activate Frontend
+
+Frontend -> OppController: GET /program-objectives
+activate OppController
+
+OppController -> AuthGuard: Verificar token JWT
+activate AuthGuard
+AuthGuard --> OppController: Token válido
+deactivate AuthGuard
+
+OppController -> RolesGuard: Verificar rol COORDINADOR
+activate RolesGuard
+RolesGuard --> OppController: 403 - Acceso denegado
+deactivate RolesGuard
+
+OppController --> Frontend: 403 - Forbidden
+deactivate OppController
+
+Frontend --> Coordinador: Error: No tiene permisos para ver OPPs
+deactivate Frontend
+
+@enduml
