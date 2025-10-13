@@ -1,4 +1,3 @@
 requests>=2.31.0
-google-generativeai>=0.5.3
-smtplib  
+google-generativeai>=0.8.5
 email-validator>=1.3.1
