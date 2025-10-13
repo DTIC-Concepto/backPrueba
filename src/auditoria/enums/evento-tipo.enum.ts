@@ -32,6 +32,9 @@ export enum EventoTipoEnum {
   // OPP (Objetivos de Programa)
   OBJETIVO_PROGRAMA_CREADO = 'OBJETIVO_PROGRAMA_CREADO',
   
+  // Resultados de Aprendizaje
+  RESULTADO_APRENDIZAJE_CREADO = 'RESULTADO_APRENDIZAJE_CREADO',
+  
   // Autenticación
   LOGIN_EXITOSO = 'LOGIN_EXITOSO',
   LOGIN_FALLIDO = 'LOGIN_FALLIDO',

@@ -1,0 +1,208 @@
+@startuml diagrama-secuencia-listar-filtrar-paginar-resultados-aprendizaje
+!theme plain
+
+title Diagrama de Secuencia - Listar, Filtrar y Paginar Resultados de Aprendizaje\n(HU7751, HU7764, HU7759, HU7770)
+
+actor "Coordinador/CEI" as User
+participant "Frontend" as FE
+participant "AuthGuard" as Auth
+participant "ResultadosAprendizajeController" as Controller
+participant "ResultadosAprendizajeService" as Service
+participant "CarreraModel" as Carrera
+participant "ResultadoAprendizajeModel" as RAModel
+participant "AuditoriaService" as Audit
+database "PostgreSQL" as DB
+
+note over User, DB
+  **Casos de Uso Cubiertos:**
+  • HU7751: Visualizar RAs Específicos (tipo='ESPECIFICO')
+  • HU7764: Visualizar RAs Generales (tipo='GENERAL')  
+  • HU7759: Buscar RAs por código y descripción
+  • HU7770: Paginar resultados de RAs
+end note
+
+== Escenario 1: Listar RAs Específicos (HU7751) ==
+User -> FE: GET /learning-outcomes?tipo=ESPECIFICO&page=1&limit=10
+FE -> Controller: GET /learning-outcomes\n?tipo=ESPECIFICO&page=1&limit=10
+activate Controller
+
+Controller -> Auth: Verificar JWT token
+Auth -> Controller: Usuario autenticado ✓
+
+Controller -> Service: findAllWithFiltersAndPagination(filters)
+activate Service
+note right: FilterDto = { tipo: 'ESPECIFICO', page: 1, limit: 10 }
+
+Service -> Carrera: findByPk(carreraId)
+Carrera -> DB: SELECT * FROM carreras WHERE id = ?
+DB -> Carrera: Carrera data
+Carrera -> Service: Carrera válida ✓
+
+Service -> RAModel: findAndCountAll(whereClause, pagination)
+activate RAModel
+RAModel -> DB: SELECT * FROM resultado_aprendizajes\nWHERE tipo = 'ESPECIFICO'\nAND carrera_id = ?\nLIMIT 10 OFFSET 0
+DB -> RAModel: [{ id: 1, codigo: 'RAE1', tipo: 'ESPECIFICO', descripcion: '...' }]
+RAModel -> Service: { rows: [...], count: 15 }
+deactivate RAModel
+
+Service -> Service: Calcular metadatos de paginación
+note right: totalPages = Math.ceil(15/10) = 2\ncurrentPage = 1, hasNext = true
+
+Service -> Controller: ResultadoPaginatedResponse
+deactivate Service
+
+Controller -> FE: 200 OK\n{ data: [...RAs específicos...], meta: { total: 15, pages: 2, currentPage: 1, hasNext: true } }
+FE -> User: Lista de RAs Específicos con paginación
+deactivate Controller
+
+== Escenario 2: Listar RAs Generales (HU7764) ==
+User -> FE: GET /learning-outcomes?tipo=GENERAL&page=1&limit=5
+FE -> Controller: GET /learning-outcomes\n?tipo=GENERAL&page=1&limit=5
+activate Controller
+
+Controller -> Auth: Verificar JWT token
+Auth -> Controller: Usuario autenticado ✓
+
+Controller -> Service: findAllWithFiltersAndPagination(filters)
+activate Service
+note right: FilterDto = { tipo: 'GENERAL', page: 1, limit: 5 }
+
+Service -> Carrera: findByPk(carreraId)
+Carrera -> Service: Carrera válida ✓
+
+Service -> RAModel: findAndCountAll(whereClause, pagination)
+activate RAModel
+RAModel -> DB: SELECT * FROM resultado_aprendizajes\nWHERE tipo = 'GENERAL'\nAND carrera_id = ?\nLIMIT 5 OFFSET 0
+DB -> RAModel: [{ id: 2, codigo: 'RA1', tipo: 'GENERAL', descripcion: '...' }]
+RAModel -> Service: { rows: [...], count: 8 }
+deactivate RAModel
+
+Service -> Service: Calcular metadatos de paginación
+note right: totalPages = Math.ceil(8/5) = 2\ncurrentPage = 1, hasNext = true
+
+Service -> Controller: ResultadoPaginatedResponse
+deactivate Service
+
+Controller -> FE: 200 OK\n{ data: [...RAs generales...], meta: { total: 8, pages: 2, currentPage: 1, hasNext: true } }
+FE -> User: Lista de RAs Generales con paginación
+deactivate Controller
+
+== Escenario 3: Buscar RAs por código y descripción (HU7759) ==
+User -> FE: Buscar "RA1" en código y "herramientas" en descripción
+FE -> Controller: GET /learning-outcomes\n?codigo=RA1&descripcion=herramientas&page=1&limit=10
+activate Controller
+
+Controller -> Auth: Verificar JWT token
+Auth -> Controller: Usuario autenticado ✓
+
+Controller -> Service: findAllWithFiltersAndPagination(filters)
+activate Service
+note right: FilterDto = {\n  codigo: 'RA1',\n  descripcion: 'herramientas',\n  page: 1, limit: 10\n}
+
+Service -> Carrera: findByPk(carreraId)
+Carrera -> Service: Carrera válida ✓
+
+Service -> RAModel: findAndCountAll(whereClause, pagination)
+activate RAModel
+note right: WHERE codigo ILIKE '%RA1%'\nAND descripcion ILIKE '%herramientas%'\nAND carrera_id = ?
+
+RAModel -> DB: SELECT * FROM resultado_aprendizajes\nWHERE codigo ILIKE '%RA1%'\nAND descripcion ILIKE '%herramientas%'\nAND carrera_id = ?\nLIMIT 10 OFFSET 0
+DB -> RAModel: [{ id: 2, codigo: 'RA1', descripcion: 'Integrar herramientas...' }]
+RAModel -> Service: { rows: [...], count: 3 }
+deactivate RAModel
+
+Service -> Service: Calcular metadatos de paginación
+note right: totalPages = Math.ceil(3/10) = 1\ncurrentPage = 1, hasNext = false
+
+Service -> Controller: ResultadoPaginatedResponse
+deactivate Service
+
+Controller -> FE: 200 OK\n{ data: [...RAs filtrados...], meta: { total: 3, pages: 1, currentPage: 1, hasNext: false } }
+FE -> User: RAs que coinciden con la búsqueda
+deactivate Controller
+
+== Escenario 4: Navegación de paginación (HU7770) ==
+User -> FE: Ir a página 2 de resultados
+FE -> Controller: GET /learning-outcomes\n?page=2&limit=5
+activate Controller
+
+Controller -> Auth: Verificar JWT token
+Auth -> Controller: Usuario autenticado ✓
+
+Controller -> Service: findAllWithFiltersAndPagination(filters)
+activate Service
+note right: FilterDto = { page: 2, limit: 5 }
+
+Service -> Carrera: findByPk(carreraId)
+Carrera -> Service: Carrera válida ✓
+
+Service -> RAModel: findAndCountAll(whereClause, pagination)
+activate RAModel
+RAModel -> DB: SELECT * FROM resultado_aprendizajes\nWHERE carrera_id = ?\nLIMIT 5 OFFSET 5
+DB -> RAModel: [{ id: 6, codigo: 'RA6', ... }, ...]
+RAModel -> Service: { rows: [...], count: 12 }
+deactivate RAModel
+
+Service -> Service: Calcular metadatos de paginación
+note right: totalPages = Math.ceil(12/5) = 3\ncurrentPage = 2\nhasPrevious = true, hasNext = true
+
+Service -> Controller: ResultadoPaginatedResponse
+deactivate Service
+
+Controller -> FE: 200 OK\n{ data: [...página 2...], meta: { total: 12, pages: 3, currentPage: 2, hasNext: true, hasPrevious: true } }
+FE -> User: Página 2 de resultados
+deactivate Controller
+
+== Escenario 5: Búsqueda general con search (Funcionalidad adicional) ==
+User -> FE: Búsqueda general "desarrollo"
+FE -> Controller: GET /learning-outcomes\n?search=desarrollo&page=1&limit=10
+activate Controller
+
+Controller -> Service: findAllWithFiltersAndPagination(filters)
+activate Service
+note right: FilterDto = { search: 'desarrollo', page: 1, limit: 10 }
+
+Service -> RAModel: findAndCountAll(whereClause, pagination)
+activate RAModel
+note right: WHERE (codigo ILIKE '%desarrollo%'\nOR descripcion ILIKE '%desarrollo%')\nAND carrera_id = ?
+
+RAModel -> DB: SELECT * FROM resultado_aprendizajes\nWHERE (codigo ILIKE '%desarrollo%'\nOR descripcion ILIKE '%desarrollo%')\nAND carrera_id = ?\nLIMIT 10 OFFSET 0
+RAModel -> Service: { rows: [...], count: 5 }
+deactivate RAModel
+
+Service -> Controller: ResultadoPaginatedResponse con coincidencias
+deactivate Service
+
+Controller -> FE: 200 OK con RAs que contienen "desarrollo"
+FE -> User: Resultados de búsqueda general
+deactivate Controller
+
+== Manejo de Errores ==
+alt Carrera no encontrada
+  Service -> Controller: throw NotFoundException('Carrera no encontrada')
+  Controller -> FE: 404 Not Found\n{ message: 'Carrera no encontrada' }
+  FE -> User: Error: Carrera no válida
+else Página fuera de rango
+  Service -> Controller: Resultado con data: [] y meta válida
+  Controller -> FE: 200 OK\n{ data: [], meta: { total: X, pages: Y, currentPage: Z } }
+  FE -> User: Página sin resultados pero válida
+else Token inválido
+  Auth -> Controller: throw UnauthorizedException()
+  Controller -> FE: 401 Unauthorized
+  FE -> User: Error de autenticación
+end
+
+note over User, DB
+  **Funcionalidades Implementadas:**
+  ✅ Filtrado por tipo (GENERAL/ESPECIFICO)
+  ✅ Filtrado por código (ILIKE parcial)
+  ✅ Filtrado por descripción (ILIKE parcial)
+  ✅ Búsqueda general combinada
+  ✅ Paginación con metadatos completos
+  ✅ Validación de carrera por usuario
+  ✅ Autenticación JWT requerida
+  ✅ Manejo de errores comprehensivo
+  ✅ Respuestas estructuradas y consistentes
+end note
+
+@enduml

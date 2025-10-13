@@ -14,6 +14,7 @@ import { AuditoriaModule } from './auditoria/auditoria.module';
 import { RolesModule } from './roles/roles.module';
 import { EurAceModule } from './eur-ace/eur-ace.module';
 import { OppModule } from './opp/opp.module';
+import { ResultadosAprendizajeModule } from './resultados-aprendizaje/resultados-aprendizaje.module';
 
 // Modelos
 import { UsuarioModel } from './usuarios/models/usuario.model';
@@ -25,6 +26,7 @@ import { CarreraModel } from './carreras/models/carrera.model';
 import { AuditoriaEventoModel } from './auditoria/models/auditoria-evento.model';
 import { EurAceModel } from './eur-ace/models/eur-ace.model';
 import { OppModel } from './opp/models/opp.model';
+import { ResultadoAprendizajeModel } from './resultados-aprendizaje/models/resultado-aprendizaje.model';
 
 @Module({
   imports: [
@@ -38,7 +40,7 @@ import { OppModel } from './opp/models/opp.model';
       username: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASS || 'postgres',
       database: process.env.DB_NAME || 'poliacredita_db',
-      models: [UsuarioModel, UsuarioRolModel, PermisoModel, RolPermisoModel, FacultadModel, CarreraModel, AuditoriaEventoModel, EurAceModel, OppModel],
+      models: [UsuarioModel, UsuarioRolModel, PermisoModel, RolPermisoModel, FacultadModel, CarreraModel, AuditoriaEventoModel, EurAceModel, OppModel, ResultadoAprendizajeModel],
       autoLoadModels: true,
       // sync: { alter: true }, // Desactivado para evitar errores con ENUMs de PostgreSQL
       logging: false // Desactivar logs SQL para mayor limpieza
@@ -54,6 +56,7 @@ import { OppModel } from './opp/models/opp.model';
     RolesModule,
     EurAceModule,
     OppModule,
+    ResultadosAprendizajeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

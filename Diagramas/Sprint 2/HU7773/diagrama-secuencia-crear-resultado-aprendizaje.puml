@@ -1,0 +1,99 @@
+@startuml
+title HU7773 - Crear Resultado de Aprendizaje
+
+actor "Usuario\n(Coordinador/CEI)" as Usuario
+participant "Frontend" as FE
+participant "AuthGuard" as Auth
+participant "RaController" as Controller
+participant "RaService" as Service  
+participant "RaModel" as Model
+participant "CarreraModel" as CarreraModel
+participant "AuditoriaService" as Audit
+database "PostgreSQL" as DB
+
+Usuario -> FE: Crear nuevo RA
+activate FE
+
+FE -> Controller: POST /learning-outcomes\n{codigo, descripcion, tipo, carreraId}
+activate Controller
+
+Controller -> Auth: Validar JWT y rol
+activate Auth
+Auth --> Controller: Token válido
+deactivate Auth
+
+Controller -> Controller: Validar DTO\n(campos requeridos, formato)
+
+alt Validación DTO exitosa
+    Controller -> Service: create(createRaDto, usuarioId)
+    activate Service
+    
+    Service -> CarreraModel: findByPk(carreraId)
+    activate CarreraModel
+    CarreraModel -> DB: SELECT * FROM carreras WHERE id = ?
+    activate DB
+    DB --> CarreraModel: Datos de carrera
+    deactivate DB
+    CarreraModel --> Service: Carrera encontrada
+    deactivate CarreraModel
+    
+    alt Carrera existe
+        Service -> Model: findOne({where: {codigo, tipo, carreraId}})
+        activate Model
+        Model -> DB: SELECT * FROM resultados_aprendizaje\nWHERE codigo = ? AND tipo = ? AND carrera_id = ?
+        activate DB
+        DB --> Model: Resultado query
+        deactivate DB
+        Model --> Service: RA existente o null
+        deactivate Model
+        
+        alt RA no existe (único por código+tipo+carrera)
+            Service -> Model: create({codigo, descripcion, tipo, carreraId})
+            activate Model
+            Model -> DB: INSERT INTO resultados_aprendizaje
+            activate DB
+            DB --> Model: RA creado
+            deactivate DB
+            Model --> Service: Nuevo RA
+            deactivate Model
+            
+            Service -> Audit: registrarEvento(RESULTADO_APRENDIZAJE_CREADO)
+            activate Audit
+            Audit -> DB: INSERT INTO auditoria
+            activate DB
+            DB --> Audit: Evento registrado
+            deactivate DB
+            Audit --> Service: Auditoría completada
+            deactivate Audit
+            
+            Service --> Controller: RA creado exitosamente
+            deactivate Service
+            
+            Controller --> FE: 201 Created\n{id, codigo, descripcion, tipo, carreraId, createdAt, updatedAt}
+            deactivate Controller
+            
+        else RA ya existe
+            Service --> Controller: ConflictException\n"Ya existe un RA con este código y tipo para esta carrera"
+            deactivate Service
+            
+            Controller --> FE: 409 Conflict\n{message, error, statusCode}
+            deactivate Controller
+        end
+        
+    else Carrera no existe
+        Service --> Controller: NotFoundException\n"La carrera especificada no existe"
+        deactivate Service
+        
+        Controller --> FE: 404 Not Found\n{message, error, statusCode}
+        deactivate Controller
+    end
+    
+else Validación DTO falla
+    Controller --> FE: 400 Bad Request\n{message[], error, statusCode}
+    deactivate Controller
+end
+
+FE --> Usuario: Resultado de la operación
+deactivate FE
+
+@enduml
