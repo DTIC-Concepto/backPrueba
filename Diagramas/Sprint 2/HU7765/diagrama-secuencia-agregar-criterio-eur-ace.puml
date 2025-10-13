@@ -1,0 +1,92 @@
+@startuml HU7765 - Agregar Criterio EUR-ACE
+
+title HU7765: Agregar Criterio EUR-ACE
+
+actor "Miembro CEI" as CEI
+participant "Frontend" as FE
+participant "JWT Guard" as JWT
+participant "Roles Guard" as RG
+participant "EurAceController" as EC
+participant "EurAceService" as ES
+participant "AuditoriaService" as AS
+participant "Sequelize ORM" as ORM
+database "PostgreSQL" as DB
+
+CEI -> FE: Accede al modal "Crear Criterio EUR-ACE"
+activate FE
+
+FE -> FE: Completa formulario:\n- Código (único)\n- Descripción detallada
+
+CEI -> FE: Hacer clic en "Guardar"
+FE -> EC: POST /eur-ace-criteria\n{codigo, descripcion}
+activate EC
+
+EC -> JWT: Validar token JWT
+activate JWT
+JWT --> EC: Token válido
+deactivate JWT
+
+EC -> RG: Verificar rol CEI
+activate RG
+RG --> EC: Rol CEI autorizado
+deactivate RG
+
+EC -> ES: create(createEurAceDto, usuarioId)
+activate ES
+
+== Validaciones ==
+ES -> ORM: findOne({where: {codigo}})
+activate ORM
+ORM -> DB: SELECT * FROM eur_ace_criteria WHERE codigo = ?
+activate DB
+DB --> ORM: Resultado consulta
+deactivate DB
+ORM --> ES: Criterio existente o null
+deactivate ORM
+
+alt Código ya existe
+    ES --> EC: throw ConflictException\n"Ya existe un criterio EUR-ACE con el código"
+    EC --> FE: 409 Conflict
+    FE --> CEI: ❌ Error: Código ya existe\nCampo "Código" resaltado\nModal permanece abierto
+else Código único
+    == Creación de Criterio EUR-ACE ==
+    ES -> ORM: create({codigo, descripcion})
+    activate ORM
+    ORM -> DB: INSERT INTO eur_ace_criteria\n(codigo, descripcion)
+    activate DB
+    DB --> ORM: Nuevo criterio creado
+    deactivate DB
+    ORM --> ES: EurAceModel creado
+    deactivate ORM
+    
+    == Auditoría ==
+    ES -> AS: registrarEvento(CRITERIO_EUR_ACE_CREADO)
+    activate AS
+    AS -> DB: INSERT INTO auditoria_eventos
+    AS --> ES: Evento registrado
+    deactivate AS
+    
+    ES --> EC: Criterio creado exitosamente
+    deactivate ES
+    EC --> FE: 201 Created\n{id, codigo, descripcion, createdAt, updatedAt}
+    deactivate EC
+    FE -> FE: Modal se cierra automáticamente
+    FE -> FE: Tabla de criterios se actualiza
+    FE --> CEI: ✅ Mensaje "Se agregó exitosamente el Criterio EUR-ACE"
+end
+
+deactivate FE
+
+note right of CEI
+  **Criterios de Aceptación Implementados:**
+  ✅ Solo miembros CEI pueden crear criterios
+  ✅ Validación de código único obligatorio
+  ✅ Validación de descripción obligatoria
+  ✅ Modal se cierra automáticamente al guardar
+  ✅ Tabla se actualiza con nuevo criterio
+  ✅ Mensaje de confirmación exitosa
+  ✅ Manejo de códigos duplicados
+  ✅ Auditoría de creación registrada
+end note
+
+@enduml

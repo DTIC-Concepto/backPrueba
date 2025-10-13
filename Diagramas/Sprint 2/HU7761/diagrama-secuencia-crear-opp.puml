@@ -1,0 +1,172 @@
+@startuml HU7761 - Crear Objetivo de Programa
+
+title HU7761: Crear Objetivo de Programa (OPP)
+
+actor "Coordinador de Carrera" as COO
+participant "Frontend" as FE
+participant "JWT Guard" as JWT
+participant "Roles Guard" as RG
+participant "OppController" as OC
+participant "OppService" as OS
+participant "CarreraModel" as CM
+participant "OppModel" as OM
+participant "AuditoriaService" as AS
+participant "Sequelize ORM" as ORM
+database "PostgreSQL" as DB
+
+== Escenario Exitoso: Crear OPP con datos únicos ==
+
+COO -> FE: Hace clic en "Nuevo OPP"
+activate FE
+
+FE -> FE: Abre modal "Crear Objetivo de Programa"
+FE -> FE: Usuario completa:\n- Código: "OPP1"\n- Descripción: "Comprender principios fundamentales..."
+
+COO -> FE: Hace clic en "Guardar"
+
+FE -> OC: POST /program-objectives\n{\n  "codigo": "OPP1",\n  "descripcion": "Comprender principios...",\n  "carreraId": 1\n}
+activate OC
+
+OC -> JWT: Validar token JWT
+activate JWT
+JWT --> OC: Token válido
+deactivate JWT
+
+OC -> RG: Verificar rol COORDINADOR
+activate RG
+RG --> OC: Rol COORDINADOR autorizado
+deactivate RG
+
+OC -> OC: Validar CreateOppDto:\n✅ Código no vacío\n✅ Descripción no vacía\n✅ CarreraId válido
+
+OC -> OS: create(createOppDto, usuarioId)
+activate OS
+
+OS -> CM: findByPk(carreraId = 1)
+activate CM
+CM -> DB: SELECT * FROM carreras WHERE id = 1
+activate DB
+DB --> CM: Carrera encontrada
+deactivate DB
+CM --> OS: CarreraModel
+deactivate CM
+
+OS -> OM: findOne({codigo: "OPP1", carreraId: 1})
+activate OM
+OM -> DB: SELECT * FROM opp\nWHERE codigo = 'OPP1'\nAND carrera_id = 1
+activate DB
+DB --> OM: null (no existe)
+deactivate DB
+OM --> OS: null
+deactivate OM
+
+OS -> OM: create({codigo, descripcion, carreraId})
+activate OM
+OM -> DB: INSERT INTO opp\n(codigo, descripcion, carrera_id)\nVALUES ('OPP1', 'Comprender...', 1)
+activate DB
+DB --> OM: OPP creado con ID = 1
+deactivate DB
+OM --> OS: OppModel{id: 1, codigo: "OPP1", ...}
+deactivate OM
+
+OS -> AS: registrarEvento({usuarioId, tipoEvento: OBJETIVO_PROGRAMA_CREADO, ...})
+activate AS
+AS -> DB: INSERT INTO auditoria_eventos
+AS --> OS: ✅ Evento registrado
+deactivate AS
+
+OS --> OC: OppModel creado
+deactivate OS
+
+OC -> OC: Mapear a OppResponseDto
+
+OC --> FE: 201 Created\n{\n  "id": 1,\n  "codigo": "OPP1",\n  "descripcion": "Comprender principios...",\n  "carreraId": 1,\n  "createdAt": "2025-10-13T05:05:36.333Z",\n  "updatedAt": "2025-10-13T05:05:36.333Z"\n}
+deactivate OC
+
+FE -> FE: Modal se cierra automáticamente
+FE -> FE: Actualizar tabla con nuevo OPP
+FE -> FE: Mostrar notificación:\n"✅ Se agregó el objetivo de programa correctamente"
+FE --> COO: ✅ OPP creado exitosamente
+
+deactivate FE
+
+== Escenario de Error: Código Duplicado ==
+
+COO -> FE: Intenta crear OPP con código "OPP1" (ya existente)
+activate FE
+
+FE -> OC: POST /program-objectives\n{"codigo": "OPP1", ...}
+activate OC
+
+note right of OC: Validaciones JWT y roles exitosas
+
+OC -> OS: create(createOppDto, usuarioId)
+activate OS
+
+OS -> CM: findByPk(carreraId)
+CM --> OS: Carrera existe
+
+OS -> OM: findOne({codigo: "OPP1", carreraId: 1})
+activate OM
+OM -> DB: SELECT * FROM opp WHERE codigo = 'OPP1' AND carrera_id = 1
+DB --> OM: OPP existente encontrado
+OM --> OS: OppModel existente
+deactivate OM
+
+OS -> OS: ❌ ConflictException:\n"Ya existe un Objetivo de Programa\ncon este código para esta carrera"
+OS --> OC: ConflictException
+deactivate OS
+
+OC --> FE: 409 Conflict\n{\n  "message": "Ya existe un Objetivo de Programa con este código para esta carrera",\n  "error": "Conflict",\n  "statusCode": 409\n}
+deactivate OC
+
+FE -> FE: Mostrar error en modal
+FE -> FE: Resaltar campo "Código"
+FE --> COO: ❌ Error: Código duplicado
+
+deactivate FE
+
+== Escenario de Error: Carrera No Existe ==
+
+COO -> FE: Intenta crear OPP con carreraId inválido
+activate FE
+
+FE -> OC: POST /program-objectives\n{"carreraId": 999, ...}
+activate OC
+
+OC -> OS: create(createOppDto, usuarioId)
+activate OS
+
+OS -> CM: findByPk(999)
+activate CM
+CM -> DB: SELECT * FROM carreras WHERE id = 999
+DB --> CM: null (no encontrado)
+CM --> OS: null
+deactivate CM
+
+OS -> OS: ❌ NotFoundException:\n"La carrera especificada no existe"
+OS --> OC: NotFoundException
+deactivate OS
+
+OC --> FE: 404 Not Found\n{\n  "message": "La carrera especificada no existe",\n  "error": "Not Found",\n  "statusCode": 404\n}
+deactivate OC
+
+FE --> COO: ❌ Error: Carrera no válida
+
+deactivate FE
+
+note right of COO
+  **Criterios de Aceptación Implementados:**
+  
+  ✅ Endpoint POST /program-objectives creado
+  ✅ Validación de campos obligatorios (código, descripción)
+  ✅ Validación de unicidad del código por carrera
+  ✅ Verificación de existencia de carrera
+  ✅ Solo coordinadores pueden crear OPPs
+  ✅ Respuesta con ID del nuevo OPP
+  ✅ Manejo de errores comprehensive
+  ✅ Documentación Swagger completa
+  ✅ Auditoría de eventos registrada
+end note
+
+@enduml
