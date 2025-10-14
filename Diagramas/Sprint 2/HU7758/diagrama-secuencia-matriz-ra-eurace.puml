@@ -1,0 +1,127 @@
+@startuml diagrama-secuencia-matriz-ra-eurace
+title HU7758 - Visualizar Mapeo RA vs EUR-ACE
+
+actor Usuario as user
+participant "Frontend\nVisualizador" as ui
+participant "AuthController" as auth
+participant "MappingsController" as mappings
+participant "MappingsService" as service
+participant "ResultadoAprendizajeModel" as raModel
+participant "EurAceModel" as eurAceModel
+participant "RaEuraceModel" as raEuraceModel
+participant "CarreraModel" as carreraModel
+database PostgreSQL as db
+
+== Autenticación y Autorización ==
+user -> ui: Accede a visualización de matriz RA-EURACE
+ui -> auth: POST /auth/login
+auth --> ui: JWT token con rol válido
+note right: Roles permitidos:\nCOORDINADOR, ADMINISTRADOR,\nPROFESOR, DECANO
+
+== Carga de Datos de Matriz ==
+ui -> mappings: GET /mappings/ra-eur-ace/matrix/{carreraId}
+note right: Headers: Authorization: Bearer {jwt}\nSin parámetros de filtro adicionales
+mappings -> mappings: @UseGuards(JwtAuthGuard, RolesGuard)\n@Roles(...permitidos)
+mappings -> service: getRaEuraceMatrix(carreraId)
+
+== Validación de Programa ==
+service -> carreraModel: findByPk(carreraId)
+carreraModel -> db: SELECT * FROM carreras WHERE id = ?
+db --> carreraModel: Carrera encontrada
+carreraModel --> service: Carrera válida
+
+alt Carrera no existe
+    service --> mappings: BadRequestException("Carrera con ID X no encontrada")
+    mappings --> ui: 400 Bad Request
+else Carrera existe
+    == Obtener Resultados de Aprendizaje ==
+    service -> raModel: findAll({where: {carreraId}, order: [['codigo', 'ASC']]})
+    raModel -> db: SELECT * FROM resultados_aprendizaje WHERE carrera_id = ? ORDER BY codigo ASC
+    db --> raModel: Lista de RAs del programa
+    raModel --> service: RA[] [RA001, RA002, RA003, ...]
+    
+    == Obtener Criterios EUR-ACE ==
+    service -> eurAceModel: findAll({order: [['codigo', 'ASC']]})
+    eurAceModel -> db: SELECT * FROM eur_ace_criteria ORDER BY codigo ASC
+    db --> eurAceModel: Lista completa de criterios EUR-ACE
+    eurAceModel --> service: EurAce[] [EA1.1, EA1.2, EA2.1, ...]
+    
+    == Obtener Mapeos Existentes ==
+    service -> raEuraceModel: findAll({include: [RA, EurAce], where: {RA.carreraId}})
+    raEuraceModel -> db: SELECT con JOINs complejos para filtrar por carrera
+    note right: JOIN con resultados_aprendizaje\npara filtrar solo RAs del programa
+    db --> raEuraceModel: Mapeos RA-EURACE existentes del programa
+    raEuraceModel --> service: RaEurace[] con justificaciones
+    
+    == Construcción de Matriz ==
+    loop Para cada RA del programa
+        loop Para cada criterio EUR-ACE
+            service -> service: Buscar mapeo existente (raId, eurAceId)
+            alt Mapeo existe
+                service -> service: Agregar {raId, eurAceId, hasMapping: true, mappingId, justification}
+            else No existe mapeo
+                service -> service: Agregar {raId, eurAceId, hasMapping: false}
+            end
+        end
+    end
+    
+    == Cálculo de Estadísticas ==
+    service -> service: totalRas = ras.length
+    service -> service: totalEurAceCriteria = eurAceCriteria.length  
+    service -> service: totalMappings = existingMappings.length
+    service -> service: maxPossibleMappings = totalRas × totalEurAceCriteria
+    service -> service: coveragePercentage = (totalMappings / maxPossibleMappings) × 100
+    
+    == Respuesta Estructurada ==
+    service --> mappings: RaEuraceMatrixResponseDto {
+    note left
+    **Estructura de respuesta:**
+    • ras: [{id, code, name, description, active, type}, ...]
+    • eurAceCriteria: [{id, code, name, description, active}, ...]  
+    • mappings: [{raId, eurAceId, hasMapping, mappingId?, justification?}, ...]
+    • programId, programName
+    • stats: {totalRas, totalEurAceCriteria, totalMappings, coveragePercentage}
+    end note
+    mappings --> ui: 200 OK - Matriz completa RA-EURACE
+end
+
+== Renderización en Frontend ==
+ui -> ui: Procesar datos de matriz
+ui -> ui: Crear tabla bidimensional RAs (filas) × EUR-ACE (columnas)
+
+loop Para cada celda de la matriz
+    alt hasMapping = true
+        ui -> ui: Mostrar indicador de mapeo ✅ con tooltip de justificación
+    else hasMapping = false  
+        ui -> ui: Mostrar celda vacía ❌ (sin relación)
+    end
+end
+
+ui -> ui: Renderizar estadísticas de cobertura
+ui -> ui: Mostrar leyenda y controles de navegación
+ui -> user: Matriz RA-EURACE interactiva visualizada
+
+== Interacciones del Usuario ==
+user -> ui: Hover sobre celda con mapeo
+ui -> user: Mostrar tooltip con justificación completa
+
+user -> ui: Click en celda con mapeo  
+ui -> user: Mostrar detalles del mapeo en modal/panel
+
+user -> ui: Filtrar/ordenar filas o columnas
+ui -> ui: Reorganizar vista sin nueva consulta al backend
+
+== Casos de Uso Completados ==
+note over user, db
+**HU7758 - Casos de uso cubiertos:**
+✅ Visualización completa de matriz RA-EURACE
+✅ Análisis de cobertura de criterios EUR-ACE por programa
+✅ Identificación de RAs no mapeados a estándares
+✅ Auditorías de acreditación y calidad académica
+✅ Reportes de cumplimiento de estándares europeos
+✅ Navegación intuitiva para coordinadores y decanos
+✅ Estadísticas automáticas de trazabilidad
+✅ Datos preparados para exportación/impresión
+end note
+
+@enduml
