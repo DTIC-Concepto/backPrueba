@@ -1,0 +1,152 @@
+@startuml diagrama-secuencia-mapeo-ra-eurace-asistente
+title HU7769 - Crear Relación de Mapeo RA vs EUR-ACE (Asistente)
+
+actor Coordinador as coord
+participant "Frontend\nWizard" as ui
+participant "AuthController" as auth
+participant "MappingsController" as mappings
+participant "MappingsService" as service
+participant "EurAceModel" as eurAceModel
+participant "ResultadoAprendizajeModel" as raModel
+participant "RaEuraceModel" as raEuraceModel
+participant "CarreraModel" as carreraModel
+database PostgreSQL as db
+
+== Autenticación y Autorización ==
+coord -> ui: Accede al wizard de mapeo RA-EURACE
+ui -> auth: POST /auth/login
+auth --> ui: JWT token con rol COORDINADOR
+note right: Validación de permisos\npara crear mappings
+
+== Paso 1: Seleccionar Criterio EUR-ACE ==
+ui -> mappings: GET /eur-ace/criterios
+note right: Obtener criterios EUR-ACE\ndisponibles del catálogo
+mappings -> eurAceModel: findAll({where: {active: true}})
+eurAceModel -> db: SELECT * FROM eur_ace WHERE active = true ORDER BY code
+db --> eurAceModel: Lista de criterios EUR-ACE
+eurAceModel --> mappings: EurAce[]
+mappings --> ui: Lista de criterios EUR-ACE disponibles
+
+coord -> ui: Selecciona un criterio EUR-ACE (ej: EA1.1 - Conocimiento técnico)
+ui -> ui: Almacena eurAceId seleccionado
+
+== Paso 2: Seleccionar RAs Disponibles ==
+ui -> mappings: GET /mappings/available-ras/eur-ace/{eurAceId}?carreraId={carreraId}&tipo=ESPECIFICO
+note right: Obtener RAs que NO tienen\nrelación con el criterio EUR-ACE seleccionado
+mappings -> service: getAvailableRAsForEurAce(eurAceId, carreraId, "ESPECIFICO")
+
+service -> eurAceModel: findByPk(eurAceId)
+eurAceModel -> db: SELECT * FROM eur_ace WHERE id = ?
+db --> eurAceModel: Criterio EUR-ACE encontrado
+eurAceModel --> service: EurAce encontrado
+
+service -> raEuraceModel: findAll({where: {eurAceId}, attributes: ['resultadoAprendizajeId']})
+raEuraceModel -> db: SELECT resultado_aprendizaje_id FROM ra_eur_ace WHERE eur_ace_id = ?
+db --> raEuraceModel: IDs de RAs ya relacionados
+raEuraceModel --> service: [2, 4, 7] // RAs ya mapeados
+
+service -> raModel: findAll({where: {carreraId, tipo: "ESPECIFICO", id: {notIn: [2,4,7]}, active: true}})
+raModel -> db: SELECT * FROM resultados_aprendizaje WHERE carrera_id = ? AND tipo = 'ESPECIFICO' AND id NOT IN (2,4,7) AND active = true
+db --> raModel: RAs disponibles sin relación
+raModel --> service: RA[] filtrados por tipo y carrera
+service --> mappings: RA[] disponibles
+mappings --> ui: Lista de RAs disponibles (sin duplicados)
+
+coord -> ui: Selecciona uno o más RAs
+ui -> ui: Almacena raIds seleccionados
+
+== Paso 3: Justificar Relación ==
+coord -> ui: Completa campo de justificación
+note left: "Este RA contribuye al criterio EUR-ACE\nmediante el desarrollo de conocimientos\ntécnicos especializados en ingeniería"
+
+ui -> ui: Valida justificación (10-1000 caracteres)
+
+== Crear Mappings en Lote ==
+ui -> mappings: POST /mappings/ra-eur-ace/batch
+note right: Headers: Authorization: Bearer {jwt}\nBody: CreateBatchRaEuraceMappingsDto
+
+mappings -> mappings: @UseGuards(JwtAuthGuard, RolesGuard)\n@Roles(RolEnum.COORDINADOR)
+mappings -> service: createBatchRaEuraceMappings(dto)
+
+service -> db: BEGIN TRANSACTION
+note right: Usar transacción para\ngarantizar consistencia
+
+loop Para cada mapping en dto.mappings
+    service -> raModel: findByPk(raId, {include: CarreraModel})
+    raModel -> db: SELECT * FROM resultados_aprendizaje WHERE id = ? JOIN carreras
+    db --> raModel: RA encontrado con carrera
+    raModel --> service: RA con carrera
+    
+    alt RA no existe
+        service -> service: Agregar error "RA con ID X no existe"
+    else RA existe
+        service -> eurAceModel: findByPk(eurAceId)
+        eurAceModel -> db: SELECT * FROM eur_ace WHERE id = ?
+        db --> eurAceModel: Criterio EUR-ACE encontrado
+        eurAceModel --> service: EurAce encontrado
+        
+        alt EUR-ACE no existe
+            service -> service: Agregar error "Criterio EUR-ACE con ID X no existe"
+        else EUR-ACE existe
+            service -> raEuraceModel: findOne({where: {resultadoAprendizajeId: raId, eurAceId}})
+            raEuraceModel -> db: SELECT * FROM ra_eur_ace WHERE resultado_aprendizaje_id = ? AND eur_ace_id = ?
+            db --> raEuraceModel: Resultado de búsqueda duplicado
+            raEuraceModel --> service: Resultado duplicado
+            
+            alt Relación ya existe
+                service -> service: Agregar error "Ya existe relación entre RA X y EUR-ACE Y"
+            else No existe duplicado
+                service -> raEuraceModel: create({resultadoAprendizajeId: raId, eurAceId, justificacion})
+                raEuraceModel -> db: INSERT INTO ra_eur_ace (resultado_aprendizaje_id, eur_ace_id, justificacion, created_at)
+                db --> raEuraceModel: Relación creada con ID
+                raEuraceModel --> service: RaEurace creado
+                service -> service: Incrementar exitosas y agregar ID a relacionesCreadas
+            end
+        end
+    end
+end
+
+alt Errores encontrados durante validación
+    service -> db: ROLLBACK TRANSACTION
+    note right: Revertir cambios si\nhay errores críticos
+else Todo exitoso
+    service -> db: COMMIT TRANSACTION
+    note right: Confirmar todas las\nrelaciones creadas
+end
+
+service --> mappings: BatchRaEuraceOperationResultDto\n{totalSolicitadas: 3, exitosas: 2, fallidas: 1, errores: [...], relacionesCreadas: [23, 24]}
+mappings --> ui: Resultado de operación batch
+
+== Confirmación y Navegación ==
+ui -> ui: Muestra resultado del wizard
+alt Operación totalmente exitosa
+    ui -> coord: "✅ Se crearon 2 relaciones RA-EURACE exitosamente"
+else Operación con errores parciales
+    ui -> coord: "⚠️ Se crearon 2 de 3 relaciones. Ver detalles de errores"
+end
+
+coord -> ui: Navega a lista de mappings RA-EURACE (opcional)
+ui -> mappings: GET /mappings/ra-eur-ace?carreraId={carreraId}
+mappings -> service: findAllRaEuraceMappings({carreraId})
+service -> raEuraceModel: findAll({include: [RA, EurAce], where: {RA.carreraId}})
+raEuraceModel -> db: SELECT con JOINs complejos
+db --> raEuraceModel: Mappings RA-EURACE completos
+raEuraceModel --> service: Mappings con relaciones
+service --> mappings: RaEurace[]
+mappings --> ui: Lista de todos los mappings RA-EURACE de la carrera
+
+== Casos de Error Manejados ==
+note over ui, db
+**Validaciones implementadas (HU7769):**
+✅ Usuario sin rol COORDINADOR → 403 Forbidden
+✅ Criterio EUR-ACE inexistente → "El criterio EUR-ACE con ID X no existe"  
+✅ RA inexistente → "El RA con ID X no existe"
+✅ RA no pertenece a carrera del coordinador → Filtrado en consulta
+✅ Relación duplicada → "Ya existe relación entre RA X y criterio EUR-ACE Y"
+✅ Justificación inválida → "La justificación debe tener entre 10 y 1000 caracteres"
+✅ Límite de lote excedido → "No se pueden procesar más de 50 relaciones a la vez"
+✅ Transacción con rollback → Garantiza consistencia de datos
+✅ Respuesta detallada → Incluye total, exitosas, fallidas, errores y IDs creados
+end note
+
+@enduml

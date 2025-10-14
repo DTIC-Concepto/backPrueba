@@ -114,7 +114,7 @@ export class EurAceController {
   }
 
   @Get()
-  @Roles(RolEnum.CEI)
+  @Roles(RolEnum.CEI, RolEnum.ADMINISTRADOR, RolEnum.DECANO, RolEnum.COORDINADOR, RolEnum.PROFESOR)
   @ApiOperation({
     summary: 'Listar criterios EUR-ACE con filtros y paginación',
     description: 'Obtiene una lista paginada de criterios EUR-ACE con capacidad de filtrado por código y descripción. Solo accesible para usuarios con rol CEI.',

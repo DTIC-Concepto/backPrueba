@@ -1,0 +1,129 @@
+@startuml diagrama-secuencia-mapeo-opp-ra-asistente
+title HU7771 - Crear Relación de Mapeo OPP vs RA (Asistente)
+
+actor Coordinador as coord
+participant "Frontend\nWizard" as ui
+participant "AuthController" as auth
+participant "MappingsController" as mappings
+participant "MappingsService" as service
+participant "OppModel" as oppModel
+participant "ResultadoAprendizajeModel" as raModel
+participant "RaOppModel" as raOppModel
+participant "CarreraModel" as carreraModel
+database PostgreSQL as db
+
+== Autenticación y Autorización ==
+coord -> ui: Accede al wizard de mapeo OPP-RA
+ui -> auth: POST /auth/login
+auth --> ui: JWT token con rol COORDINADOR
+note right: Validación de permisos\npara crear mappings
+
+== Paso 1: Seleccionar OPP ==
+ui -> mappings: GET /mappings/opp-ra/carrera/{carreraId}/opps
+note right: Obtener OPPs de la carrera\ndel coordinador
+mappings -> service: findOppsByCarrera(carreraId)
+service -> oppModel: findAll({where: {carreraId}})
+oppModel -> db: SELECT * FROM opp WHERE carrera_id = ?
+db --> oppModel: Lista de OPPs
+oppModel --> service: OPP[]
+service --> mappings: OPP[]
+mappings --> ui: Lista de OPPs disponibles
+
+coord -> ui: Selecciona un OPP (ej: OPP3)
+ui -> ui: Almacena oppId seleccionado
+
+== Paso 2: Seleccionar RA Disponibles ==
+ui -> mappings: GET /available-ras/opp/{oppId}?tipo=ESPECIFICO
+note right: Obtener RAs que NO tienen\nrelación con el OPP seleccionado
+mappings -> service: getAvailableRAsForOpp(oppId, "ESPECIFICO")
+
+service -> oppModel: findByPk(oppId, {include: CarreraModel})
+oppModel -> db: SELECT * FROM opp WHERE id = ? JOIN carreras
+db --> oppModel: OPP con carrera
+oppModel --> service: OPP encontrado
+
+service -> raOppModel: findAll({where: {oppId}, attributes: ['resultadoAprendizajeId']})
+raOppModel -> db: SELECT resultado_aprendizaje_id FROM ra_opp WHERE opp_id = ?
+db --> raOppModel: IDs de RAs ya relacionados
+raOppModel --> service: [1, 3, 5] // RAs ya mapeados
+
+service -> raModel: findAll({where: {carreraId, tipo: "ESPECIFICO", id: {notIn: [1,3,5]}}})
+raModel -> db: SELECT * FROM resultados_aprendizaje WHERE carrera_id = ? AND tipo = 'ESPECIFICO' AND id NOT IN (1,3,5)
+db --> raModel: RAs disponibles sin relación
+raModel --> service: RA[]
+service --> mappings: RA[] filtrados
+mappings --> ui: Lista de RAs disponibles (sin duplicados)
+
+coord -> ui: Selecciona uno o más RAs
+ui -> ui: Almacena raIds seleccionados
+
+== Paso 3: Justificar Relación ==
+coord -> ui: Completa campo de justificación
+note left: "Este RA contribuye al OPP mediante\nel desarrollo de competencias técnicas\nespecíficas en análisis de sistemas"
+
+ui -> ui: Valida justificación (mínimo 10 caracteres)
+
+== Crear Mappings en Lote ==
+ui -> mappings: POST /mappings/opp-ra/batch
+note right: Headers: Authorization: Bearer {jwt}\nBody: CreateBatchRaOppMappingsDto
+
+mappings -> mappings: @UseGuards(JwtAuthGuard, RolesGuard)\n@Roles(RolEnum.COORDINADOR)
+mappings -> service: createBatchRaOppMappings(dto)
+
+loop Para cada mapping en el lote
+    service -> raModel: findByPk(raId, {include: CarreraModel})
+    raModel -> db: SELECT * FROM resultados_aprendizaje WHERE id = ?
+    db --> raModel: RA encontrado
+    raModel --> service: RA con carrera
+    
+    service -> oppModel: findByPk(oppId, {include: CarreraModel})
+    oppModel -> db: SELECT * FROM opp WHERE id = ?
+    db --> oppModel: OPP encontrado  
+    oppModel --> service: OPP con carrera
+    
+    service -> service: Validar misma carrera
+    alt RA y OPP de diferente carrera
+        service --> mappings: Error: "No pertenecen a la misma carrera"
+        mappings --> ui: BatchOperationResultDto con error
+    else RA y OPP de misma carrera
+        service -> raOppModel: findOne({where: {raId, oppId}})
+        raOppModel -> db: SELECT * FROM ra_opp WHERE resultado_aprendizaje_id = ? AND opp_id = ?
+        db --> raOppModel: null (no existe duplicado)
+        raOppModel --> service: No duplicado
+        
+        service -> raOppModel: create({raId, oppId, justificacion, estadoActivo: true})
+        raOppModel -> db: INSERT INTO ra_opp (resultado_aprendizaje_id, opp_id, justificacion, estado_activo)
+        db --> raOppModel: Relación creada con ID
+        raOppModel --> service: RaOpp creado
+    end
+end
+
+service --> mappings: BatchOperationResultDto\n{exitosas: 2, fallidas: 0, relacionesCreadas: [15, 16]}
+mappings --> ui: Resultado de operación batch
+
+== Confirmación y Navegación ==
+ui -> ui: Muestra resultado exitoso
+ui -> coord: "✅ Se crearon 2 relaciones OPP-RA exitosamente"
+
+coord -> ui: Navega a lista de mappings (opcional)
+ui -> mappings: GET /mappings/opp-ra/carrera/{carreraId}
+mappings -> service: findMappingsByCarrera(carreraId)
+service -> raOppModel: findAll con includes de RA y OPP
+raOppModel -> db: SELECT con JOINs
+db --> raOppModel: Mappings completos
+raOppModel --> service: Mappings con relaciones
+service --> mappings: RaOpp[]
+mappings --> ui: Lista de todos los mappings de la carrera
+
+== Casos de Error Manejados ==
+note over ui, db
+**Validaciones implementadas:**
+✅ Usuario sin rol COORDINADOR → 403 Forbidden
+✅ OPP inexistente → "El OPP con ID X no existe"  
+✅ RA inexistente → "El RA con ID X no existe"
+✅ RA y OPP de carreras diferentes → "No pertenecen a la misma carrera"
+✅ Relación duplicada → "Ya existe relación entre RA X y OPP Y"
+✅ Justificación vacía → "La justificación es obligatoria (mín. 10 caracteres)"
+end note
+
+@enduml
