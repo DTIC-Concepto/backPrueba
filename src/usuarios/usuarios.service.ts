@@ -159,11 +159,32 @@ export class UsuariosService {
 
   async findAll(filterDto?: FilterUsuarioDto): Promise<UsuarioModel[]> {
     const whereClause: any = {};
-    const includeClause: any[] = [];
+    const includeClause: any[] = [
+      // Siempre incluir todos los roles del usuario
+      {
+        model: this.usuarioRolModel,
+        as: 'usuarioRoles',
+        required: false,
+        where: {
+          activo: true
+        }
+      },
+      // Incluir información de la facultad
+      {
+        association: 'facultad',
+        attributes: ['id', 'nombre', 'codigo'],
+        required: false,
+      }
+    ];
 
     // Filtrar por estado activo
     if (filterDto?.estadoActivo !== undefined) {
       whereClause.estadoActivo = filterDto.estadoActivo;
+    }
+
+    // Filtrar por facultad específica
+    if (filterDto?.facultadId) {
+      whereClause.facultadId = filterDto.facultadId;
     }
 
     // Búsqueda por texto en nombres, apellidos o correo
@@ -185,17 +206,6 @@ export class UsuariosService {
           '$usuarioRoles.activo$': true
         }
       ];
-
-      // Incluir la relación con usuario_roles para el filtro
-      includeClause.push({
-        model: this.usuarioRolModel,
-        as: 'usuarioRoles',
-        required: false, // LEFT JOIN para no excluir usuarios sin roles adicionales
-        attributes: [], // No necesitamos los datos, solo para el filtro
-        where: {
-          activo: true
-        }
-      });
     }
 
     const usuarios = await this.usuarioModel.findAll({
@@ -211,7 +221,7 @@ export class UsuariosService {
 
   // HU5099 & HU5107: Búsqueda paginada de usuarios
   async findAllPaginated(searchDto: SearchPaginatedUsuarioDto): Promise<UsuarioPaginatedResponseDto> {
-    const { search, page = 1, limit = 10, rol } = searchDto;
+    const { search, page = 1, limit = 10, rol, facultadId } = searchDto;
     
     // Construir condiciones de búsqueda (HU5099)
     const whereClause: any = {};
@@ -221,7 +231,21 @@ export class UsuariosService {
         attributes: ['id', 'nombre', 'codigo'],
         required: false,
       },
+      // Siempre incluir todos los roles del usuario
+      {
+        model: this.usuarioRolModel,
+        as: 'usuarioRoles',
+        required: false,
+        where: {
+          activo: true
+        }
+      }
     ];
+
+    // Filtrar por facultad específica
+    if (facultadId) {
+      whereClause.facultadId = facultadId;
+    }
 
     // Construir condiciones de búsqueda y filtros
     const searchConditions: any[] = [];
@@ -246,17 +270,6 @@ export class UsuariosService {
           '$usuarioRoles.activo$': true
         }
       );
-
-      // Incluir la relación con usuario_roles para el filtro
-      includeClause.push({
-        model: this.usuarioRolModel,
-        as: 'usuarioRoles',
-        required: false, // LEFT JOIN para no excluir usuarios sin roles adicionales
-        attributes: ['rol', 'activo'], // Incluir algunos datos para debugging
-        where: {
-          activo: true
-        }
-      });
     }
 
     // Combinar condiciones

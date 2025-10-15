@@ -1,7 +1,9 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { InjectModel } from '@nestjs/sequelize';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
+import { CarreraModel } from '../carreras/models/carrera.model';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
@@ -13,6 +15,8 @@ export class AuthService {
     private readonly usuariosService: UsuariosService,
     private readonly jwtService: JwtService,
     private readonly auditoriaService: AuditoriaService,
+    @InjectModel(CarreraModel)
+    private readonly carreraModel: typeof CarreraModel,
   ) {}
 
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
@@ -76,6 +80,27 @@ export class AuthService {
 
     const access_token = this.jwtService.sign(payload);
 
+    // Buscar información de la carrera si el usuario es coordinador
+    let carreraInfo: any = undefined;
+    const isCoordinador = userRoles.includes(RolEnum.COORDINADOR) || rol === RolEnum.COORDINADOR;
+    
+    if (isCoordinador) {
+      const carrera = await this.carreraModel.findOne({
+        where: { coordinadorId: user.id },
+        attributes: ['id', 'codigo', 'nombre', 'duracion', 'modalidad'],
+      });
+      
+      if (carrera) {
+        carreraInfo = {
+          id: carrera.id,
+          codigo: carrera.codigo,
+          nombre: carrera.nombre,
+          duracion: carrera.duracion,
+          modalidad: carrera.modalidad,
+        };
+      }
+    }
+
     // Registrar evento de login exitoso con el rol seleccionado
     this.auditoriaService.registrarLoginExitoso(user.id, user.correo);
 
@@ -90,6 +115,7 @@ export class AuthService {
         rolPrincipal: user.rol, // Rol principal del usuario
         rolesDisponibles: userRoles as RolEnum[], // Todos los roles del usuario
         estadoActivo: user.estadoActivo,
+        carrera: carreraInfo, // Información de la carrera si es coordinador
       },
     };
   }

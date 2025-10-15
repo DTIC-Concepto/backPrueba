@@ -1,5 +1,5 @@
-import { IsOptional, IsEnum, IsBoolean, IsString } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { IsOptional, IsEnum, IsBoolean, IsString, IsInt, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { RolEnum } from '../../common/enums/rol.enum';
 
@@ -34,4 +34,15 @@ export class FilterUsuarioDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filtrar por facultad específica (ID de la facultad)',
+    example: 1,
+    type: 'integer',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  facultadId?: number;
 }
