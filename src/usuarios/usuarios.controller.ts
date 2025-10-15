@@ -168,7 +168,7 @@ export class UsuariosController {
   @Roles(RolEnum.ADMINISTRADOR)
   @ApiOperation({
     summary: 'Listar usuarios con filtros',
-    description: 'Obtiene la lista de usuarios registrados en el sistema con filtros opcionales por rol, estado y búsqueda. Los administradores pueden filtrar por rol específico para gestionar permisos de manera eficiente. Solo accesible para usuarios con rol de Administrador.',
+    description: 'Obtiene la lista de usuarios registrados en el sistema con filtros opcionales por rol, estado, facultad y búsqueda. Los administradores pueden filtrar por rol específico y facultad para gestionar permisos de manera eficiente. El resultado incluye todos los roles asignados a cada usuario (rol principal y roles adicionales). Solo accesible para usuarios con rol de Administrador.',
   })
   @ApiQuery({
     name: 'rol',
@@ -190,6 +190,13 @@ export class UsuariosController {
     description: 'Buscar usuarios por nombres, apellidos o correo electrónico',
     type: String,
     example: 'Juan',
+  })
+  @ApiQuery({
+    name: 'facultadId',
+    required: false,
+    description: 'Filtrar usuarios por facultad específica (ID de la facultad)',
+    type: Number,
+    example: 1,
   })
   @ApiResponse({
     status: 200,
@@ -314,6 +321,20 @@ export class UsuariosController {
     description: 'Número de elementos por página (máximo 50)',
     type: Number,
     example: 10,
+  })
+  @ApiQuery({
+    name: 'rol',
+    required: false,
+    description: 'Filtrar usuarios por rol específico (incluye rol principal y roles adicionales)',
+    enum: RolEnum,
+    example: RolEnum.PROFESOR,
+  })
+  @ApiQuery({
+    name: 'facultadId',
+    required: false,
+    description: 'Filtrar usuarios por facultad específica (ID de la facultad)',
+    type: Number,
+    example: 1,
   })
   @ApiResponse({
     status: 200,

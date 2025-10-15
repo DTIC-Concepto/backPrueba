@@ -54,4 +54,16 @@ export class SearchPaginatedUsuarioDto {
   @IsOptional()
   @IsEnum(RolEnum, { message: 'El rol debe ser un valor válido' })
   rol?: RolEnum;
+
+  @ApiProperty({
+    description: 'Filtrar por facultad específica (ID de la facultad)',
+    example: 1,
+    type: 'integer',
+    required: false,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, { message: 'El ID de facultad debe ser un número' })
+  @Min(1, { message: 'El ID de facultad debe ser mayor a 0' })
+  facultadId?: number;
 }

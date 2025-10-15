@@ -1,6 +1,23 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { RolEnum } from '../../common/enums/rol.enum';
 
+class CarreraInfoDto {
+  @ApiProperty({ description: 'ID de la carrera', example: 1 })
+  id: number;
+
+  @ApiProperty({ description: 'Código de la carrera', example: 'ING-SIS' })
+  codigo: string;
+
+  @ApiProperty({ description: 'Nombre de la carrera', example: 'Ingeniería en Sistemas' })
+  nombre: string;
+
+  @ApiProperty({ description: 'Duración en semestres', example: 10 })
+  duracion: number;
+
+  @ApiProperty({ description: 'Modalidad de la carrera', example: 'PRESENCIAL' })
+  modalidad: string;
+}
+
 class UserResponseDto {
   @ApiProperty({ description: 'ID único del usuario', example: 1 })
   id: number;
@@ -38,6 +55,13 @@ class UserResponseDto {
 
   @ApiProperty({ description: 'Estado activo del usuario', example: true })
   estadoActivo: boolean;
+
+  @ApiProperty({ 
+    description: 'Información de la carrera si el usuario es coordinador',
+    type: CarreraInfoDto,
+    required: false
+  })
+  carrera?: CarreraInfoDto;
 }
 
 export class AuthResponseDto {
