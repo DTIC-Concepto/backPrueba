@@ -108,7 +108,7 @@ jobs:
 
       # 🔹 Descargar artefactos de logs del job CI
       - name: Download Test Logs Artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: test-logs-${{ env.COMMIT }}
           path: logs/
