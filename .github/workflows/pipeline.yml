@@ -106,7 +106,6 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # 🔹 Descargar artefactos de logs del job CI
       - name: Download Test Logs Artifact
         uses: actions/download-artifact@v4
         with:
