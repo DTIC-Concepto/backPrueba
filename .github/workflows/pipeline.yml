@@ -45,6 +45,7 @@ jobs:
           mkdir -p logs
           COMMIT=${GITHUB_SHA::7}
           echo "Commit: $COMMIT"
+          echo "COMMIT=$COMMIT" >> $GITHUB_ENV
 
           npm run test:cov > logs/test_cov_${COMMIT}.log 2>&1
           npm run test > logs/test_${COMMIT}.log 2>&1
@@ -56,6 +57,7 @@ jobs:
       - name: Run End-to-End Tests and Save Logs
         run: |
           COMMIT=${GITHUB_SHA::7}
+          echo "COMMIT=$COMMIT" >> $GITHUB_ENV
           npm run test:e2e > logs/test_e2e_${COMMIT}.log 2>&1
           # Extraer solo errores E2E (opcional)
           grep -A 10 -B 2 "FAIL" logs/test_e2e_${COMMIT}.log > logs/test_e2e_errors_${COMMIT}.log || true
@@ -64,7 +66,7 @@ jobs:
       - name: Upload Test Logs
         uses: actions/upload-artifact@v4
         with:
-          name: test-logs-${{ github.sha::7 }}
+          name: test-logs-${{ env.COMMIT }}
           path: logs/
 
       # 🔍 Análisis de calidad del código con SonarCloud
@@ -108,7 +110,7 @@ jobs:
       - name: Download Test Logs Artifact
         uses: actions/download-artifact@v3
         with:
-          name: test-logs-${{ github.sha::7 }}
+          name: test-logs-${{ env.COMMIT }}
           path: logs/
 
       # 🔹 Generar reporte y enviar correo con logs adjuntos
