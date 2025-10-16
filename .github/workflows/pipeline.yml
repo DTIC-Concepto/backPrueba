@@ -39,14 +39,35 @@ jobs:
             sleep 3
           done
 
-      - name: Run Unit Tests with Coverage
-        continue-on-error: false
-        run: npm run test:cov
-    
-      - name: Run End-to-End Tests
-        continue-on-error: false
-        run: npm run test:e2e
+      # 🧪 Ejecutar Unit Tests con cobertura y guardar logs
+      - name: Run Unit Tests with Coverage and Save Logs
+        run: |
+          mkdir -p logs
+          COMMIT=${GITHUB_SHA::7}
+          echo "Commit: $COMMIT"
 
+          npm run test:cov > logs/test_cov_${COMMIT}.log 2>&1
+          npm run test > logs/test_${COMMIT}.log 2>&1
+
+          # Extraer solo errores unitarios (opcional)
+          grep -A 10 -B 2 "FAIL" logs/test_${COMMIT}.log > logs/test_errors_${COMMIT}.log || true
+
+      # 🧪 Ejecutar End-to-End Tests y guardar logs
+      - name: Run End-to-End Tests and Save Logs
+        run: |
+          COMMIT=${GITHUB_SHA::7}
+          npm run test:e2e > logs/test_e2e_${COMMIT}.log 2>&1
+          # Extraer solo errores E2E (opcional)
+          grep -A 10 -B 2 "FAIL" logs/test_e2e_${COMMIT}.log > logs/test_e2e_errors_${COMMIT}.log || true
+
+      # 🧾 Subir todos los logs como artefacto
+      - name: Upload Test Logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ github.sha::7 }}
+          path: logs/
+
+      # 🔍 Análisis de calidad del código con SonarCloud
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2.2.0
         env:
@@ -83,7 +104,15 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run report generation
+      # 🔹 Descargar artefactos de logs del job CI
+      - name: Download Test Logs Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: test-logs-${{ github.sha::7 }}
+          path: logs/
+
+      # 🔹 Generar reporte y enviar correo con logs adjuntos
+      - name: Run report and send email
         run: python scripts/report_commit.py
 
   deploy:
@@ -98,5 +127,6 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
+
       - name: Deploy to Railway
         run: railway up --service=${{ env.SVC_ID }}

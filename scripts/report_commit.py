@@ -9,7 +9,6 @@ from google.genai.errors import APIError
 
 # -----------------------------
 # Configuración GitHub y SonarCloud
-# VALORES DE PRUEBA (HARDCODEADOS)
 # -----------------------------
 GH_PAT = os.getenv("GH_PAT")
 SONAR_TOKEN = os.getenv("SONAR_TOKEN")
@@ -28,6 +27,9 @@ MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
 # Nombres de los archivos de artefactos
 DEUDA_TECNICA_FILE = "deuda_tecnica_informe.txt" 
 ANALISIS_IA_FILE = "analisis_ia_commit.txt"
+
+# Carpeta donde están los logs generados por GitHub Actions
+LOGS_FOLDER = "logs"
 
 # -----------------------------
 # Funciones auxiliares
@@ -68,7 +70,6 @@ def get_sonar_metrics_totals():
     Obtiene SOLO las 5 métricas específicas de SonarCloud.
     """
     url = "https://sonarcloud.io/api/measures/component"
-    # SOLO las 5 métricas solicitadas
     metric_keys = "bugs,vulnerabilities,code_smells,complexity,coverage"
     params = {
         "component": SONAR_PROJECT_KEY,
@@ -88,12 +89,10 @@ def get_sonar_metrics_totals():
                 metrics[m["metric"]] = value
         print(f"✅ Las 5 métricas de SonarCloud se obtuvieron correctamente.")
     else:
-        # Detalle de error 404
         try:
             error_details = r.json()
         except json.JSONDecodeError:
             error_details = r.text[:200]
-        
         print(f"❌ ERROR: Fallo al obtener métricas de SonarCloud (Totales): {r.status_code}")
         print(f"   URL de Solicitud: {r.url}")
         print(f"   Respuesta del servidor: {error_details}")
@@ -102,7 +101,7 @@ def get_sonar_metrics_totals():
 
 def get_sonar_issues_details(types_to_get, severities):
     """
-    Obtiene los detalles de los issues (Bugs, Code Smells, etc.) para el informe TXT.
+    Obtiene los detalles de los issues (Bugs, Code Smells, Vulnerabilities).
     """
     base_url = "https://sonarcloud.io/api/issues/search"
     all_issues = []
@@ -119,7 +118,6 @@ def get_sonar_issues_details(types_to_get, severities):
             "s": "SEVERITY"
         }
         r = requests.get(base_url, params=params, auth=(SONAR_TOKEN, ""))
-        
         if r.status_code != 200:
             print(f"❌ ERROR: Fallo al obtener detalles de Issues (Página {page}): {r.status_code}")
             break
@@ -129,10 +127,8 @@ def get_sonar_issues_details(types_to_get, severities):
         all_issues.extend(issues)
         
         total_issues = data.get("total", 0)
-        
         if len(all_issues) >= total_issues or not issues:
             break
-            
         page += 1
     
     issues_by_type = {}
@@ -145,14 +141,10 @@ def get_sonar_issues_details(types_to_get, severities):
     return issues_by_type
 
 def generate_technical_debt_report(sonar_metrics, sonar_issues):
-    """
-    Genera el contenido del archivo de deuda técnica (TXT detallado).
-    """
-    
+    """Genera el archivo de deuda técnica (TXT detallado)."""
     report = f"--- INFORME DETALLADO DE DEUDA TÉCNICA (SonarCloud) ---\n"
     report += f"Proyecto: {SONAR_PROJECT_KEY}\n\n"
     
-    # 1. Resumen de Totales (Métricas)
     report += "--- RESUMEN DE MÉTRICAS GLOBALES ---\n"
     report += f"- Bugs: {sonar_metrics.get('bugs', 'N/A')}\n"
     report += f"- Vulnerabilidades: {sonar_metrics.get('vulnerabilities', 'N/A')}\n"
@@ -160,8 +152,6 @@ def generate_technical_debt_report(sonar_metrics, sonar_issues):
     report += f"- Complejidad Ciclomática: {sonar_metrics.get('complexity', 'N/A')}\n"
     report += f"- Cobertura de Tests: {sonar_metrics.get('coverage', 'N/A')}%\n\n"
 
-    # 2. Detalle de Issues (Bugs, Code Smells, Vulnerabilities)
-    
     issue_types_map = {
         "BUG": "BUGS 🐛", 
         "VULNERABILITY": "VULNERABILIDADES 🛡️", 
@@ -175,49 +165,34 @@ def generate_technical_debt_report(sonar_metrics, sonar_issues):
         report += f"================================\n"
         report += f"DETALLE DE ISSUES: {title} ({len(issues)})\n"
         report += f"================================\n"
-        
         if not issues:
             report += "No se encontraron issues de este tipo.\n\n"
             continue
-        
         has_details = True
-
         for i, issue in enumerate(issues):
             file_path = issue.get("component", "N/A").split(":")[-1] 
             line = issue.get("line", "N/A")
             severity = issue.get("severity", "N/A")
             message = issue.get("message", "Sin descripción")
-            
             report += f"{i+1}. [{severity} / Línea {line}] en {file_path}\n"
             report += f"   - Regla: {issue.get('rule', 'N/A')}\n"
             report += f"   - Mensaje: {message}\n"
             report += "--------------------------------\n"
-        
         report += "\n"
 
     if not has_details and not sonar_issues:
-        report += "\nATENCIÓN: No se pudo recuperar el detalle de issues, probablemente debido a un error de conexión o permisos con SonarCloud. Las métricas del resumen superior reflejan el estado del proyecto.\n"
+        report += "\nATENCIÓN: No se pudo recuperar el detalle de issues.\n"
 
-    # Guardar en archivo para adjuntar
     with open(DEUDA_TECNICA_FILE, 'w', encoding='utf-8') as f:
         f.write(report)
         
     return report
 
 def analyze_commit_for_description(commit_message):
-    """
-    Llama a Gemini SOLAMENTE para generar una Descripción Funcional Detallada.
-    """
-    
+    """Genera descripción funcional del commit con Gemini."""
     prompt = f"""
     Eres un asistente de documentación. Analiza el siguiente mensaje de commit y genera una **Descripción Funcional Detallada** del commit.
-
     Tu respuesta DEBE comenzar y terminar SOLAMENTE con la descripción generada.
-
-    Ejemplo de formato de salida:
-    Este commit introduce una nueva ruta para el cálculo de impuestos en el módulo de facturación, asegurando que se aplique la tasa del 12% para transacciones mayores a $100.
-
-    ---
     Commit a analizar:
     {commit_message}
     """
@@ -227,7 +202,6 @@ def analyze_commit_for_description(commit_message):
             contents=prompt,
             config=genai.types.GenerateContentConfig(temperature=0.2)
         )
-        
         return response.text.strip()
     except APIError as e:
         error_msg = f"❌ Error al usar Gemini API: {e}"
@@ -239,18 +213,16 @@ def analyze_commit_for_description(commit_message):
         return f"Error en el análisis de IA: {error_msg}"
 
 def generate_full_report_file(body_content):
-    """
-    Genera el contenido del archivo de informe general (ANALISIS_IA_FILE) con el mismo contenido del cuerpo del correo.
-    """
+    """Genera el archivo de informe general."""
     try:
         with open(ANALISIS_IA_FILE, 'w', encoding='utf-8') as f:
             f.write(body_content)
-        print(f"✅ Archivo de informe general '{ANALISIS_IA_FILE}' generado con el cuerpo del correo.")
+        print(f"✅ Archivo de informe general '{ANALISIS_IA_FILE}' generado.")
     except Exception as e:
         print(f"❌ Error al generar el archivo de informe general: {e}")
 
 def send_email_with_artifacts(to_emails, subject, body, attachments=[]):
-    """Función para enviar correo."""
+    """Envía correo con los archivos adjuntos."""
     smtp_server = "smtp.gmail.com"
     smtp_port = 587
     sender_email = os.getenv("EMAIL_USER")
@@ -260,22 +232,27 @@ def send_email_with_artifacts(to_emails, subject, body, attachments=[]):
     msg["From"] = sender_email
     msg["To"] = ", ".join(to_emails)
     msg["Subject"] = subject
-    # Se usa subtype='plain' ya que el contenido es texto plano formateado
     msg.set_content(body, subtype='plain') 
 
+    # Adjuntar archivos TXT de informe y todos los logs
     for file_path in attachments:
-        try:
-            with open(file_path, "rb") as f:
-                data = f.read()
-                name = os.path.basename(file_path)
-            
-            if name.endswith(".txt"):
-                 msg.add_attachment(data, maintype="text", subtype="plain", filename=name)
-            else:
-                 msg.add_attachment(data, maintype="application", subtype="octet-stream", filename=name)
-        except FileNotFoundError:
-            print(f"Archivo adjunto no encontrado: {file_path}")
+        if not os.path.exists(file_path):
             continue
+        with open(file_path, "rb") as f:
+            data = f.read()
+            name = os.path.basename(file_path)
+        if name.endswith(".txt"):
+            msg.add_attachment(data, maintype="text", subtype="plain", filename=name)
+        else:
+            msg.add_attachment(data, maintype="application", subtype="octet-stream", filename=name)
+
+    # Adjuntar todos los logs de CI/CD
+    if os.path.exists(LOGS_FOLDER):
+        for filename in os.listdir(LOGS_FOLDER):
+            filepath = os.path.join(LOGS_FOLDER, filename)
+            with open(filepath, "rb") as f:
+                data = f.read()
+            msg.add_attachment(data, maintype="text", subtype="plain", filename=filename)
 
     try:
         with smtplib.SMTP(smtp_server, smtp_port) as server:
@@ -290,9 +267,8 @@ def send_email_with_artifacts(to_emails, subject, body, attachments=[]):
 # Pipeline principal
 # -----------------------------
 def main():
-    print("Iniciando pipeline de informe de commit y calidad (Descripción IA + 5 métricas + Detalle TXT).")
+    print("Iniciando pipeline de informe de commit y calidad (Descripción IA + 5 métricas + Detalle TXT + Logs).")
     
-    # 1. Obtener detalles del último commit
     latest_commit = get_latest_commit()
     if not latest_commit:
         print("❌ No se pudo obtener el último commit. Finalizando.")
@@ -305,35 +281,28 @@ def main():
     full_message = latest_commit["full_message"]
     print(f"✅ Commit más reciente obtenido: {sha[:7]} - {title}")
     
-    # 2. Obtener métricas de SonarCloud (SOLO 5)
     print("⏳ Obteniendo métricas totales de SonarCloud...")
     sonar_metrics = get_sonar_metrics_totals() 
     sonar_issues = {}
     
-    # 3. Lógica para obtener detalles de issues (si las métricas funcionaron)
     if sonar_metrics:
-        print("✅ Las métricas totales funcionaron. Obteniendo detalles de issues...")
+        print("✅ Métricas obtenidas. Obteniendo detalles de issues...")
         issue_types = ["BUG", "VULNERABILITY", "CODE_SMELL"]
         severities_to_get = ["BLOCKER", "CRITICAL", "MAJOR", "MINOR", "INFO"]
         sonar_issues = get_sonar_issues_details(issue_types, severities_to_get)
     else:
-        print("⚠️ Advertencia: No se pudo obtener el detalle de issues.")
+        print("⚠️ No se pudieron obtener detalles de issues.")
 
-    # 4. Generar el archivo de informe detallado de deuda técnica (TXT)
     print(f"⚙️ Generando informe detallado de deuda técnica en '{DEUDA_TECNICA_FILE}'...")
     generate_technical_debt_report(sonar_metrics, sonar_issues)
     
-    # 5. Analizar el commit con Gemini (SOLO Descripción)
-    print(f"⏳ Analizando commit con Gemini 2.5 Pro (SOLO descripción funcional)...")
+    print(f"⏳ Analizando commit con Gemini...")
     llm_description = analyze_commit_for_description(full_message)
-    
-    # 6. Construir el cuerpo del correo y el informe general (ANALISIS_IA_FILE)
     
     files_list = "\n".join([f"- {f}" for f in files_modified])
     if not files_list:
         files_list = "- Ninguno detectado o error al obtener."
     
-    # Resumen con las 5 métricas disponibles
     metric_summary = (
         f"Bugs: {sonar_metrics.get('bugs', 'N/A')} | "
         f"Vulnerabilidades: {sonar_metrics.get('vulnerabilities', 'N/A')} | "
@@ -342,34 +311,36 @@ def main():
         f"Cobertura: {sonar_metrics.get('coverage', 'N/A')}"
     )
 
-    # Generar el cuerpo del correo (y el contenido del archivo de informe general)
     body = "--- Informe de Commit y Calidad de Código ---\n\n"
-    body += f"⭐ **Commit Analizado:** {sha}\n"
-    body += f"📝 **Título:** {title}\n"
-    body += f"📖 **Descripción original:**\n{description}\n"
+    body += f"⭐ Commit Analizado: {sha}\n"
+    body += f"📝 Título: {title}\n"
+    body += f"📖 Descripción original:\n{description}\n"
     body += "\n--- Descripción Funcional (Gemini 2.5 Pro) ---\n"
     body += f"{llm_description}\n" 
     body += "\n--- Archivos Modificados ---\n"
     body += f"{files_list}\n"
     body += "\n--- Resumen de Métricas Clave de SonarCloud ---\n"
     body += f"{metric_summary}\n"
-    body += "\nEl informe detallado de Deuda Técnica (TXT) con la lista de issues y este informe general (TXT) están adjuntos."
-    
-    # Generar el archivo TXT con el mismo contenido del cuerpo del correo
+    body += "\nSe adjuntan todos los logs de tests, cobertura y E2E junto con los informes TXT."
+
     generate_full_report_file(body)
 
-    # 7. Enviar el correo
     subject_line = f"Informe de Calidad: Commit {sha[:7]} - '{title[:50]}...'"
     attachments_list = [DEUDA_TECNICA_FILE, ANALISIS_IA_FILE]
 
     send_email_with_artifacts(
-        to_emails=["erik.gaibor@epn.edu.ec", "kevin.lema02@epn.edu.ec","denis.suntasig@epn.edu.ec","victor.rodriguez01@epn.edu.ec","jose.teran@epn.edu.ec"],
+        to_emails=[
+            "erik.gaibor@epn.edu.ec", 
+            "kevin.lema02@epn.edu.ec",
+            "denis.suntasig@epn.edu.ec",
+            "victor.rodriguez01@epn.edu.ec",
+            "jose.teran@epn.edu.ec"
+        ],
         subject=subject_line,
         body=body,
         attachments=attachments_list
     )
     
-    # Limpiar archivos temporales
     for f in attachments_list:
         if os.path.exists(f):
             os.remove(f)
