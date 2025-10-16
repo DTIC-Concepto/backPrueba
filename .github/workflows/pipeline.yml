@@ -41,37 +41,37 @@ jobs:
             sleep 3
           done
 
-      # 🧪 Ejecutar Unit Tests con cobertura y guardar logs
-      - name: Run Unit Tests with Coverage and Save Logs
+      # 🧪 Definir SHA corto y exportar como output y env
+      - name: Set Commit SHA
+        id: set_commit
         run: |
-          mkdir -p logs
           COMMIT=${GITHUB_SHA::7}
           echo "Commit: $COMMIT"
+          echo "commit=$COMMIT" >> $GITHUB_OUTPUT
           echo "COMMIT=$COMMIT" >> $GITHUB_ENV
 
-          npm run test:cov > logs/test_cov_${COMMIT}.log 2>&1
-          npm run test > logs/test_${COMMIT}.log 2>&1
+      # 🧪 Ejecutar Unit y E2E Tests, mostrar en consola y guardar logs
+      - name: Run Tests and Save Logs
+        run: |
+          mkdir -p logs
 
-          # Extraer solo errores unitarios (opcional)
+          # Unit tests con cobertura
+          npm run test:cov 2>&1 | tee logs/test_cov_${COMMIT}.log
+          npm test 2>&1 | tee logs/test_${COMMIT}.log
           grep -A 10 -B 2 "FAIL" logs/test_${COMMIT}.log > logs/test_errors_${COMMIT}.log || true
 
-      # 🧪 Ejecutar End-to-End Tests y guardar logs
-      - name: Run End-to-End Tests and Save Logs
-        run: |
-          COMMIT=${GITHUB_SHA::7}
-          echo "COMMIT=$COMMIT" >> $GITHUB_ENV
-          npm run test:e2e > logs/test_e2e_${COMMIT}.log 2>&1
-          # Extraer solo errores E2E (opcional)
+          # E2E tests
+          npm run test:e2e 2>&1 | tee logs/test_e2e_${COMMIT}.log
           grep -A 10 -B 2 "FAIL" logs/test_e2e_${COMMIT}.log > logs/test_e2e_errors_${COMMIT}.log || true
 
       # 🧾 Subir todos los logs como artefacto
       - name: Upload Test Logs
         uses: actions/upload-artifact@v4
         with:
-          name: test-logs-${{ env.COMMIT }}
+          name: test-logs-${{ steps.set_commit.outputs.commit }}
           path: logs/
 
-      # 🔍 Análisis de calidad del código con SonarCloud
+      # 🔍 SonarCloud Scan
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2.2.0
         env:
@@ -109,6 +109,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # 🔹 Descargar artefactos de logs del job CI
       - name: Download Test Logs Artifact
         uses: actions/download-artifact@v4
         with:
