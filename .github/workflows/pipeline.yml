@@ -11,6 +11,8 @@ jobs:
   ci:
     name: Build, Test, and Analyze with SonarCloud
     runs-on: ubuntu-latest
+    outputs:
+      COMMIT: ${{ steps.set_commit.outputs.commit }}
     env:
       DB_HOST: ${{ secrets.DB_HOST }}
       DB_PORT: ${{ secrets.DB_PORT }}
@@ -86,6 +88,7 @@ jobs:
     runs-on: ubuntu-latest
     if: success()
     env:
+      COMMIT: ${{ needs.ci.outputs.COMMIT }}
       EMAIL_USER: ${{ secrets.EMAIL_USER }}
       EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
       GH_PAT: ${{ secrets.GH_PAT }}
