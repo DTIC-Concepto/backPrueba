@@ -58,11 +58,9 @@ jobs:
           # Unit tests con cobertura
           npm run test:cov 2>&1 | tee logs/test_cov_${COMMIT}.log
           npm test 2>&1 | tee logs/test_${COMMIT}.log
-          grep -A 10 -B 2 "FAIL" logs/test_${COMMIT}.log > logs/test_errors_${COMMIT}.log || true
 
           # E2E tests
           npm run test:e2e 2>&1 | tee logs/test_e2e_${COMMIT}.log
-          grep -A 10 -B 2 "FAIL" logs/test_e2e_${COMMIT}.log > logs/test_e2e_errors_${COMMIT}.log || true
 
       # 🧾 Subir todos los logs como artefacto
       - name: Upload Test Logs
@@ -82,6 +80,14 @@ jobs:
             -Dsonar.javascript.lcov.reportPaths=./coverage/lcov.info
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            
+      - name: Send Test Logs via Email
+        if: always()
+        run: python scripts/send_logs.py
+        env:
+          COMMIT: ${{ steps.set_commit.outputs.commit }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
 
   informe-sonar:
     needs: ci
