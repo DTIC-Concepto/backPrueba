@@ -50,16 +50,6 @@ export class CreateUsuarioDto {
   contrasena: string;
 
   @ApiProperty({
-    description: 'URL de la foto de perfil del usuario',
-    example: 'https://example.com/photos/juan-perez.jpg',
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  @IsUrl({}, { message: 'La foto debe ser una URL válida' })
-  foto?: string;
-
-  @ApiProperty({
     description: 'Rol del usuario en el sistema. IMPORTANTE: Los roles DECANO y SUBDECANO requieren facultadId y solo puede haber uno por facultad.',
     enum: RolEnum,
     example: RolEnum.PROFESOR,

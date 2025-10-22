@@ -756,7 +756,6 @@ export class UsuariosController {
           apellidos: 'Rodríguez Silva',
           cedula: '1234567890',
           correo: 'carlos.rodriguez@epn.edu.ec',
-          foto: 'https://example.com/photos/carlos-rodriguez.jpg',
           rol: 'PROFESOR',
           estadoActivo: true,
           facultad: {

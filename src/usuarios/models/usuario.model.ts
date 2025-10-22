@@ -73,13 +73,6 @@ export class UsuarioModel extends Model<UsuarioModel> {
   declare contrasena: string;
 
   @Column({
-    type: DataType.TEXT,
-    allowNull: true,
-    comment: 'URL o path de la foto de perfil del usuario',
-  })
-  declare foto: string | null;
-
-  @Column({
     type: DataType.ENUM(...Object.values(RolEnum)),
     allowNull: false,
   })
