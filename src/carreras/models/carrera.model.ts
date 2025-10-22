@@ -12,6 +12,7 @@ import {
   ForeignKey,
   CreatedAt,
   UpdatedAt,
+  HasMany,
 } from 'sequelize-typescript';
 import { ApiProperty } from '@nestjs/swagger';
 import { FacultadModel } from '../../facultades/models/facultad.model';
@@ -19,6 +20,7 @@ import { UsuarioModel } from '../../usuarios/models/usuario.model';
 import { ModalidadEnum } from '../../common/enums/modalidad.enum';
 import { AsignaturaModel } from '../../asignaturas/models/asignatura.model';
 import { CarreraAsignaturaModel } from '../../asignaturas/models/carrera-asignatura.model';
+import { UsuarioCarreraModel } from '../../common/models/usuario-carrera.model';
 
 @Table({
   tableName: 'carreras',
@@ -149,4 +151,12 @@ export class CarreraModel extends Model<CarreraModel> {
   // Relación Many-to-Many con Asignaturas
   @BelongsToMany(() => AsignaturaModel, () => CarreraAsignaturaModel)
   asignaturas: AsignaturaModel[];
+
+  // Relación Many-to-Many con Usuarios (profesores asignados)
+  @BelongsToMany(() => UsuarioModel, () => UsuarioCarreraModel)
+  profesores: UsuarioModel[];
+
+  // Relación con la tabla intermedia usuario_carreras
+  @HasMany(() => UsuarioCarreraModel, { foreignKey: 'carreraId', as: 'usuarioCarreras' })
+  usuarioCarreras: UsuarioCarreraModel[];
 }

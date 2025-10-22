@@ -22,6 +22,7 @@ import { MappingsModule } from './mappings/mappings.module';
 // Modelos
 import { UsuarioModel } from './usuarios/models/usuario.model';
 import { UsuarioRolModel } from './common/models/usuario-rol.model';
+import { UsuarioCarreraModel } from './common/models/usuario-carrera.model';
 import { PermisoModel } from './common/models/permiso.model';
 import { RolPermisoModel } from './common/models/rol-permiso.model';
 import { FacultadModel } from './facultades/models/facultad.model';
@@ -49,7 +50,7 @@ import { RaaRaModel } from './mappings/models/raa-ra.model';
       username: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASS || 'postgres',
       database: process.env.DB_NAME || 'poliacredita_db',
-      models: [UsuarioModel, UsuarioRolModel, PermisoModel, RolPermisoModel, FacultadModel, CarreraModel, AsignaturaModel, CarreraAsignaturaModel, RaaModel, AuditoriaEventoModel, EurAceModel, OppModel, ResultadoAprendizajeModel, RaOppModel, RaEuraceModel, RaaRaModel],
+      models: [UsuarioModel, UsuarioRolModel, UsuarioCarreraModel, PermisoModel, RolPermisoModel, FacultadModel, CarreraModel, AsignaturaModel, CarreraAsignaturaModel, RaaModel, AuditoriaEventoModel, EurAceModel, OppModel, ResultadoAprendizajeModel, RaOppModel, RaEuraceModel, RaaRaModel],
       autoLoadModels: true,
       synchronize: true,
       // sync: { alter: true }, // Desactivado para evitar errores con ENUMs de PostgreSQL

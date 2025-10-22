@@ -11,11 +11,14 @@ import {
   ForeignKey,
   BelongsTo,
   HasMany,
+  BelongsToMany,
 } from 'sequelize-typescript';
 import * as bcrypt from 'bcrypt';
 import { RolEnum } from '../../common/enums/rol.enum';
 import { FacultadModel } from '../../facultades/models/facultad.model';
 import { UsuarioRolModel } from '../../common/models/usuario-rol.model';
+import { UsuarioCarreraModel } from '../../common/models/usuario-carrera.model';
+import { CarreraModel } from '../../carreras/models/carrera.model';
 
 @Table({
   tableName: 'usuarios',
@@ -107,7 +110,13 @@ export class UsuarioModel extends Model<UsuarioModel> {
   @HasMany(() => UsuarioRolModel, { foreignKey: 'usuarioId', as: 'usuarioRoles' })
   usuarioRoles: UsuarioRolModel[];
 
-  // Nota: La relación con CarreraModel se define desde el lado de Carrera para evitar dependencias circulares
+  // Relación many-to-many con carreras (profesores asignados)
+  @BelongsToMany(() => CarreraModel, () => UsuarioCarreraModel)
+  carreras: CarreraModel[];
+
+  // Relación con la tabla intermedia usuario_carreras
+  @HasMany(() => UsuarioCarreraModel, { foreignKey: 'usuarioId', as: 'usuarioCarreras' })
+  usuarioCarreras: UsuarioCarreraModel[];
 
   // Hook para encriptar contraseña antes de crear
   @BeforeCreate
