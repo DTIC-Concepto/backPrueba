@@ -1,0 +1,86 @@
+@startuml HU8079 - Crear Asignatura
+
+title HU8079: Registrar nueva asignatura (PEA)
+
+actor "Usuario (Coordinador/Profesor/etc)" as User
+participant "Frontend" as FE
+participant "JWT Guard" as JWT
+participant "Roles Guard" as RG
+participant "AsignaturasController" as AC
+participant "AsignaturasService" as AS
+participant "Sequelize ORM" as ORM
+participant "CarreraModel" as Carrera
+participant "CarreraAsignaturaModel" as CarreraAsig
+participant "AsignaturaModel" as Asig
+participant "Sequelize Transaction" as TX
+
+
+User -> FE: Accede al formulario de crear asignatura
+activate FE
+note right of FE
+    Completa formulario:
+    - Código (único)
+    - Nombre
+    - Créditos
+    - Descripción
+    - Tipo/Unidad/Pensum/Nivel
+    - Carreras asociadas
+end note
+
+User -> FE: Envía POST /asignaturas
+FE -> AC: POST /asignaturas {...datos asignatura...}
+activate AC
+
+AC -> JWT: Validar token JWT
+activate JWT
+JWT --> AC: Token válido
+AC -> RG: Verificar rol autorizado
+activate RG
+RG --> AC: Rol autorizado
+
+AC -> AS: create(createAsignaturaDto)
+activate AS
+
+
+'"Validaciones"'
+AS -> Asig: findOne({codigo})
+Asig -> ORM: SELECT * FROM asignaturas WHERE codigo = ?
+ORM --> Asig: Resultado
+Asig --> AS: Asignatura existente o null
+alt Código ya existe
+    AS --> AC: throw BadRequestException
+    AC --> FE: 400 BadRequest "Código duplicado"
+    FE --> User: Error: Código duplicado
+else Código único
+    AS -> Carrera: findAll({id in carreraIds})
+    Carrera -> ORM: SELECT * FROM carreras WHERE id IN (...)
+    ORM --> Carrera: Carreras encontradas
+    Carrera --> AS: Lista carreras
+    alt Faltan carreras
+        AS --> AC: throw BadRequestException
+        AC --> FE: 400 BadRequest "Carreras no existen"
+        FE --> User: Error: Carreras no existen
+    else Todas las carreras existen
+        AS -> TX: Iniciar transacción
+        activate TX
+        AS -> Asig: create(asignaturaData, {transaction})
+        Asig -> ORM: INSERT INTO asignaturas (...)
+        ORM --> Asig: Nueva asignatura creada
+        Asig --> AS: asignatura.id
+        AS -> CarreraAsig: bulkCreate(relaciones, {transaction})
+        CarreraAsig -> ORM: INSERT INTO carrera_asignatura (...)
+        ORM --> CarreraAsig: Relaciones creadas
+        CarreraAsig --> AS: OK
+        AS -> TX: commit
+        deactivate TX
+        AS -> Asig: findByPk(id, {include: carreras})
+        Asig -> ORM: SELECT ... JOIN carreras
+        ORM --> Asig: Asignatura con carreras
+        Asig --> AS: Asignatura creada
+        AS --> AC: Asignatura creada
+        AC --> FE: 201 Created {asignatura}
+        FE --> User: ✅ Asignatura registrada exitosamente
+    end
+end
+
+@enduml

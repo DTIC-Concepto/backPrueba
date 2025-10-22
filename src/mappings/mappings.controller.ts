@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Delete,
+  Patch,
   Body,
   Param,
   Query,
@@ -26,6 +27,11 @@ import {
   FilterRaEuraceMappingsDto,
   BatchRaEuraceOperationResultDto,
 } from './dto/create-ra-eurace-mapping.dto';
+import { CreateBatchRaaRaMappingsDto } from './dto/create-batch-raa-ra-mappings.dto';
+import { CreateRaaRaMappingDto } from './dto/create-raa-ra-mapping.dto';
+import { UpdateRaaRaMappingDto } from './dto/update-raa-ra-mapping.dto';
+import { FilterRaaRaMappingsDto } from './dto/filter-raa-ra-mappings.dto';
+import { BatchRaaRaOperationResultDto } from './dto/batch-raa-ra-operation-result.dto';
 import { RaOppModel } from './models/ra-opp.model';
 import { RaEuraceModel } from './models/ra-eurace.model';
 import { ResultadoAprendizajeModel, TipoRA } from '../resultados-aprendizaje/models/resultado-aprendizaje.model';
@@ -39,7 +45,7 @@ import {
 @ApiBearerAuth()
 @Controller('mappings')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(RolEnum.COORDINADOR)
+@Roles(RolEnum.COORDINADOR,RolEnum.ADMINISTRADOR, RolEnum.DECANO, RolEnum.JEFE_DEPARTAMENTO)
 export class MappingsController {
   constructor(private readonly mappingsService: MappingsService) {}
 
@@ -136,7 +142,7 @@ export class MappingsController {
 
   @ApiTags('Mappings OPP-RA')
   @Get('opp-ra')
-  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR)
+  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR, RolEnum.DECANO, RolEnum.CEI)
   @ApiOperation({
     summary: 'Listar todas las relaciones OPP-RA',
     description: 'Obtiene todas las relaciones entre OPPs y RAs con filtros opcionales',
@@ -178,7 +184,7 @@ export class MappingsController {
 
   @ApiTags('Mappings OPP-RA')
   @Get('opp-ra/carrera/:carreraId')
-  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR)
+  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR, RolEnum.CEI)
   @ApiOperation({
     summary: 'Obtener relaciones OPP-RA por carrera',
     description: 'Lista todas las relaciones de una carrera específica',
@@ -201,7 +207,7 @@ export class MappingsController {
 
   @ApiTags('Mappings OPP-RA')
   @Get('available-ras/opp/:oppId')
-  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR)
+  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR, RolEnum.DECANO, RolEnum.CEI)
   @ApiOperation({
     summary: 'Obtener RAs disponibles para un OPP',
     description: `
@@ -297,7 +303,7 @@ export class MappingsController {
 
   @ApiTags('Mappings RA-EURACE')
   @Get('ra-eur-ace')
-  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR)
+  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR, RolEnum.DECANO, RolEnum.CEI)
   @ApiOperation({
     summary: 'Listar relaciones RA-EURACE con filtros',
     description: `
@@ -391,7 +397,7 @@ export class MappingsController {
 
   @ApiTags('Mappings RA-EURACE')
   @Get('ra-eur-ace/matrix/:carreraId')
-  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR, RolEnum.DECANO)
+  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR, RolEnum.DECANO, RolEnum.CEI)
   @ApiOperation({
     summary: 'Obtener matriz de mapeo RA-EURACE para visualización',
     description: `
@@ -477,7 +483,7 @@ export class MappingsController {
 
   @ApiTags('Mappings OPP-RA')
   @Get('opp-ra/matrix/:carreraId')
-  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR, RolEnum.DECANO)
+  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR, RolEnum.DECANO, RolEnum.CEI)
   @ApiOperation({
     summary: 'Obtener matriz de mapeo OPP-RA para visualización',
     description: `
@@ -543,7 +549,7 @@ export class ProgramsController {
   constructor(private readonly mappingsService: MappingsService) {}
 
   @Get(':carreraId/opps')
-  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR, RolEnum.DECANO)
+  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR, RolEnum.DECANO, RolEnum.CEI)
   @ApiOperation({
     summary: 'Obtener catálogo de OPPs por carrera',
     description: `
@@ -585,7 +591,7 @@ export class ProgramsController {
   }
   
   @Get(':carreraId/learning-outcomes')
-  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR, RolEnum.DECANO)
+  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR, RolEnum.DECANO, RolEnum.CEI)
   @ApiOperation({
     summary: 'Obtener catálogo de RAs por carrera',
     description: `
@@ -625,5 +631,281 @@ export class ProgramsController {
     @Query('lang') lang: string = 'es',
   ) {
     return this.mappingsService.getProgramRasCatalog(+carreraId, lang);
+  }
+}
+
+@ApiTags('Mappings RAA-RA')
+@ApiBearerAuth()
+@Controller('mappings')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class RaaRaMappingsController {
+  constructor(private readonly mappingsService: MappingsService) {}
+
+  @Post('raa-ra')
+  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Crear una relación RAA-RA',
+    description: `
+    **HU8084**: Crear una relación de mapeo entre un Resultado de Aprendizaje de Asignatura (RAA) 
+    y un Resultado de Aprendizaje de Carrera (RA).
+    
+    **Validaciones implementadas**:
+    - ✅ Verificar que el RAA existe
+    - ✅ Verificar que el RA existe
+    - ✅ Verificar que pertenecen a la misma carrera
+    - ✅ Verificar que no existe relación duplicada
+    - ✅ Validar nivel de aporte (ALTO, MEDIO, BAJO)
+    - ✅ Validar justificación (10-1000 caracteres, opcional)
+    
+    **Roles autorizados**: COORDINADOR, ADMINISTRADOR
+    `,
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Relación RAA-RA creada exitosamente',
+    example: {
+      id: 1,
+      raaId: 1,
+      resultadoAprendizajeId: 6,
+      nivelAporte: 'Medio',
+      justificacion: 'Este RA complementa parcialmente las competencias del RAA',
+      estadoActivo: true,
+      createdAt: '2025-10-21T21:30:00.000Z',
+      updatedAt: '2025-10-21T21:30:00.000Z',
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Datos inválidos o errores de validación',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Ya existe una relación entre este RAA y RA',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Sin permisos para realizar esta operación',
+  })
+  async createRaaRaMapping(
+    @Body() dto: CreateRaaRaMappingDto,
+  ) {
+    return this.mappingsService.createRaaRaMapping(dto);
+  }
+
+  
+
+  @Get('raa-ra')
+  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR, RolEnum.DECANO, RolEnum.CEI)
+  @ApiOperation({
+    summary: 'Listar todas las relaciones RAA-RA con filtros',
+    description: `
+    **HU8084**: Obtiene todas las relaciones entre RAAs y RAs con filtros opcionales.
+    
+    **Filtros disponibles**:
+    - raaId: Filtrar por ID de RAA específico
+    - resultadoAprendizajeId: Filtrar por ID de RA específico
+    - asignaturaId: Filtrar por asignatura (todos los RAAs de esa asignatura)
+    - carreraId: Filtrar por carrera
+    - nivelAporte: Filtrar por nivel de aporte (ALTO, MEDIO, BAJO)
+    - estadoActivo: Filtrar por estado activo
+    `,
+  })
+  @ApiQuery({ name: 'raaId', required: false, type: Number })
+  @ApiQuery({ name: 'resultadoAprendizajeId', required: false, type: Number })
+  @ApiQuery({ name: 'asignaturaId', required: false, type: Number })
+  @ApiQuery({ name: 'carreraId', required: false, type: Number })
+  @ApiQuery({ name: 'nivelAporte', required: false, enum: ['Alto', 'Medio', 'Bajo'] })
+  @ApiQuery({ name: 'estadoActivo', required: false, type: Boolean })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de relaciones RAA-RA',
+  })
+  async findAllRaaRaMappings(
+    @Query() filters: FilterRaaRaMappingsDto,
+  ) {
+    return this.mappingsService.findAllRaaRaMappings(filters);
+  }
+
+  @Get('available-ras/raa/:raaId')
+  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR)
+  @ApiOperation({
+    summary: 'Obtener RAs disponibles para un RAA',
+    description: `
+    **HU8084 - Paso 2 del asistente**: Obtiene todos los RAs de la carrera especificada 
+    que NO tienen relación con el RAA seleccionado.
+    
+    **Funcionalidad**:
+    - Valida que el RAA existe
+    - Retorna solo RAs de la carrera especificada sin relación previa con el RAA
+    - Permite filtrar por tipo de RA (GENERAL/ESPECIFICO)
+    - Ordenados por código
+    `,
+  })
+  @ApiParam({
+    name: 'raaId',
+    description: 'ID del RAA seleccionado en paso 1',
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'carreraId',
+    required: true,
+    description: 'ID de la carrera',
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'tipo',
+    required: false,
+    description: 'Filtrar RAs por tipo: GENERAL o ESPECIFICO',
+    enum: TipoRA,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de RAs disponibles para relacionar',
+    type: [ResultadoAprendizajeModel],
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'RAA no encontrado',
+  })
+  async getAvailableRAsForRaa(
+    @Param('raaId') raaId: number,
+    @Query('carreraId') carreraId: number,
+    @Query('tipo') tipo?: TipoRA,
+  ): Promise<ResultadoAprendizajeModel[]> {
+    return this.mappingsService.getAvailableRAsForRaa(+raaId, +carreraId, tipo);
+  }
+
+  @Patch('raa-ra/:id')
+  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Actualizar una relación RAA-RA',
+    description: `
+    **HU8084**: Actualizar una relación de mapeo existente entre RAA y RA.
+    
+    Permite modificar:
+    - Nivel de aporte (ALTO, MEDIO, BAJO)
+    - Justificación
+    - Estado activo
+    
+    **Nota**: No se puede cambiar el RAA o RA de la relación, solo sus atributos.
+    
+    **Roles autorizados**: COORDINADOR, ADMINISTRADOR
+    `,
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID de la relación RAA-RA a actualizar',
+    type: Number,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Relación RAA-RA actualizada exitosamente',
+    example: {
+      id: 1,
+      raaId: 1,
+      resultadoAprendizajeId: 6,
+      nivelAporte: 'Alto',
+      justificacion: 'Este RA contribuye significativamente al desarrollo de competencias',
+      estadoActivo: true,
+      createdAt: '2025-10-21T21:30:00.000Z',
+      updatedAt: '2025-10-21T21:35:00.000Z',
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Relación no encontrada',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Datos inválidos',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Sin permisos para realizar esta operación',
+  })
+  async updateRaaRaMapping(
+    @Param('id') id: number,
+    @Body() dto: UpdateRaaRaMappingDto,
+  ) {
+    return this.mappingsService.updateRaaRaMapping(+id, dto);
+  }
+
+  @Delete('raa-ra/:id')
+  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR, RolEnum.DECANO, RolEnum.JEFE_DEPARTAMENTO)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Eliminar relación RAA-RA',
+    description: 'Elimina una relación específica entre RAA y RA',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID de la relación RAA-RA',
+    type: Number,
+  })
+  @ApiResponse({
+    status: 204,
+    description: 'Relación eliminada exitosamente',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Relación no encontrada',
+  })
+  async deleteRaaRaMapping(@Param('id') id: number): Promise<void> {
+    return this.mappingsService.deleteRaaRaMapping(+id);
+  }
+
+  @Get('raa-ra/matrix/:asignaturaId/:carreraId')
+  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR, RolEnum.DECANO, RolEnum.CEI)
+  @ApiOperation({
+    summary: 'Obtener matriz de mapeo RAA-RA para visualización por asignatura',
+    description: `
+    **HU8084**: Endpoint para obtener datos de matriz de relaciones RAA-RA.
+    
+    Retorna una matriz completa que cruza RAAs de una asignatura con RAs de la carrera,
+    mostrando todas las relaciones existentes con niveles de aporte.
+    
+    **Características**:
+    - ✅ Matriz bidimensional: RAAs × RAs
+    - ✅ Estadísticas de cobertura y trazabilidad
+    - ✅ Niveles de aporte incluidos (ALTO, MEDIO, BAJO)
+    - ✅ Justificaciones de mapeos
+    - ✅ Preparado para visualización frontend
+    
+    **Casos de uso**:
+    - Visualización de matriz de trazabilidad RAA-RA por asignatura
+    - Análisis de contribución de asignatura a RAs de carrera
+    - Auditorías de acreditación curricular
+    - Reportes de cobertura de RAs por asignatura
+    `,
+  })
+  @ApiParam({
+    name: 'asignaturaId',
+    description: 'ID de la asignatura',
+    type: Number,
+  })
+  @ApiParam({
+    name: 'carreraId',
+    description: 'ID de la carrera',
+    type: Number,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Matriz de mapeo RAA-RA obtenida exitosamente',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Asignatura o carrera no encontrada',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'No existe relación entre la carrera y la asignatura',
+  })
+  async getRaaRaMatrix(
+    @Param('asignaturaId') asignaturaId: number,
+    @Param('carreraId') carreraId: number,
+  ) {
+    return this.mappingsService.getRaaRaMatrix(+asignaturaId, +carreraId);
   }
 }

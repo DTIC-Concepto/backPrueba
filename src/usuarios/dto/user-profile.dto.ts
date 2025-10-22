@@ -61,6 +61,14 @@ export class UserProfileDto {
   correo: string;
 
   @ApiProperty({
+    description: 'URL de la foto de perfil del usuario',
+    type: String,
+    example: 'https://example.com/photos/juan-perez.jpg',
+    required: false,
+  })
+  foto?: string;
+
+  @ApiProperty({
     description: 'Rol activo del usuario en la sesión actual',
     enum: RolEnum,
     example: RolEnum.PROFESOR,

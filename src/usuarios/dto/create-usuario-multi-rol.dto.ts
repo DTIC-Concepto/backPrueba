@@ -10,7 +10,8 @@ import {
   IsPositive, 
   IsArray, 
   ArrayMinSize,
-  ValidateNested
+  ValidateNested,
+  IsUrl
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -82,6 +83,16 @@ export class CreateUsuarioMultiRolDto {
   @IsString()
   @MinLength(6)
   contrasena: string;
+
+  @ApiProperty({
+    description: 'URL de la foto de perfil del usuario',
+    example: 'https://example.com/photos/maria-garcia.jpg',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @IsUrl({}, { message: 'La foto debe ser una URL válida' })
+  foto?: string;
 
   @ApiProperty({
     description: 'Rol principal del usuario (para compatibilidad con sistema anterior). Este rol también debe estar incluido en la lista de roles.',

@@ -123,7 +123,7 @@ export class FacultadesController {
 
   @Get()
   @UseGuards(RolesGuard)
-  @Roles(RolEnum.ADMINISTRADOR)
+  @Roles(RolEnum.ADMINISTRADOR, RolEnum.COORDINADOR, RolEnum.PROFESOR, RolEnum.JEFE_DEPARTAMENTO, RolEnum.SUBDECANO, RolEnum.DECANO, RolEnum.CEI, RolEnum.DGIP)
   @ApiOperation({
     summary: 'Listar facultades con filtros avanzados y paginación',
     description: 'Obtiene la lista paginada de facultades registradas en el sistema con filtros avanzados: estado activo, búsqueda por código/nombre, y filtro por número de carreras. Incluye información completa como código, nombre, número de carreras y decano. Solo accesible para usuarios con rol de Administrador.',

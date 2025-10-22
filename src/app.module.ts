@@ -9,6 +9,8 @@ import { UsuariosModule } from './usuarios/usuarios.module';
 import { AuthModule } from './auth/auth.module';
 import { FacultadesModule } from './facultades/facultades.module';
 import { CarrerasModule } from './carreras/carreras.module';
+import { AsignaturasModule } from './asignaturas/asignaturas.module';
+import { RaaModule } from './raa/raa.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AuditoriaModule } from './auditoria/auditoria.module';
 import { RolesModule } from './roles/roles.module';
@@ -24,12 +26,16 @@ import { PermisoModel } from './common/models/permiso.model';
 import { RolPermisoModel } from './common/models/rol-permiso.model';
 import { FacultadModel } from './facultades/models/facultad.model';
 import { CarreraModel } from './carreras/models/carrera.model';
+import { AsignaturaModel } from './asignaturas/models/asignatura.model';
+import { CarreraAsignaturaModel } from './asignaturas/models/carrera-asignatura.model';
+import { RaaModel } from './raa/models/raa.model';
 import { AuditoriaEventoModel } from './auditoria/models/auditoria-evento.model';
 import { EurAceModel } from './eur-ace/models/eur-ace.model';
 import { OppModel } from './opp/models/opp.model';
 import { ResultadoAprendizajeModel } from './resultados-aprendizaje/models/resultado-aprendizaje.model';
 import { RaOppModel } from './mappings/models/ra-opp.model';
 import { RaEuraceModel } from './mappings/models/ra-eurace.model';
+import { RaaRaModel } from './mappings/models/raa-ra.model';
 
 @Module({
   imports: [
@@ -43,8 +49,9 @@ import { RaEuraceModel } from './mappings/models/ra-eurace.model';
       username: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASS || 'postgres',
       database: process.env.DB_NAME || 'poliacredita_db',
-      models: [UsuarioModel, UsuarioRolModel, PermisoModel, RolPermisoModel, FacultadModel, CarreraModel, AuditoriaEventoModel, EurAceModel, OppModel, ResultadoAprendizajeModel, RaOppModel, RaEuraceModel],
+      models: [UsuarioModel, UsuarioRolModel, PermisoModel, RolPermisoModel, FacultadModel, CarreraModel, AsignaturaModel, CarreraAsignaturaModel, RaaModel, AuditoriaEventoModel, EurAceModel, OppModel, ResultadoAprendizajeModel, RaOppModel, RaEuraceModel, RaaRaModel],
       autoLoadModels: true,
+      synchronize: true,
       // sync: { alter: true }, // Desactivado para evitar errores con ENUMs de PostgreSQL
       logging: false // Desactivar logs SQL para mayor limpieza
 
@@ -54,6 +61,8 @@ import { RaEuraceModel } from './mappings/models/ra-eurace.model';
     AuthModule,
     FacultadesModule,
     CarrerasModule,
+    AsignaturasModule,
+    RaaModule,
     DashboardModule,
     AuditoriaModule,
     RolesModule,

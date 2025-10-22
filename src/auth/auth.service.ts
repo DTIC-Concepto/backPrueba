@@ -111,6 +111,7 @@ export class AuthService {
         nombres: user.nombres,
         apellidos: user.apellidos,
         correo: user.correo,
+        foto: user.foto || undefined,
         rol: rol, // Rol seleccionado para esta sesión
         rolPrincipal: user.rol, // Rol principal del usuario
         rolesDisponibles: userRoles as RolEnum[], // Todos los roles del usuario

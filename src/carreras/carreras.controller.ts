@@ -138,7 +138,7 @@ export class CarrerasController {
 
   @Get()
   @UseGuards(RolesGuard)
-  @Roles(RolEnum.ADMINISTRADOR)
+  @Roles(RolEnum.ADMINISTRADOR, RolEnum.COORDINADOR, RolEnum.JEFE_DEPARTAMENTO, RolEnum.SUBDECANO, RolEnum.DECANO, RolEnum.CEI, RolEnum.DGIP)
   @ApiOperation({
     summary: 'Listar carreras con filtros avanzados y paginación (HU5104-5110)',
     description: 'Obtiene la lista paginada de carreras registradas en el sistema. Implementa HU5104 (listado básico), HU5105 (búsqueda por palabra clave), HU5106 (filtro por estado), HU5109 (paginación) y HU5110 (filtro por facultad). Solo accesible para usuarios con rol de Administrador.',

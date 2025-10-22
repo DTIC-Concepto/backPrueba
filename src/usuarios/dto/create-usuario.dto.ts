@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsNotEmpty, IsString, MinLength, IsBoolean, IsOptional, IsNumber, IsPositive } from 'class-validator';
+import { IsEmail, IsEnum, IsNotEmpty, IsString, MinLength, IsBoolean, IsOptional, IsNumber, IsPositive, IsUrl } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { RolEnum } from '../../common/enums/rol.enum';
 
@@ -48,6 +48,16 @@ export class CreateUsuarioDto {
   @IsString()
   @MinLength(6)
   contrasena: string;
+
+  @ApiProperty({
+    description: 'URL de la foto de perfil del usuario',
+    example: 'https://example.com/photos/juan-perez.jpg',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @IsUrl({}, { message: 'La foto debe ser una URL válida' })
+  foto?: string;
 
   @ApiProperty({
     description: 'Rol del usuario en el sistema. IMPORTANTE: Los roles DECANO y SUBDECANO requieren facultadId y solo puede haber uno por facultad.',

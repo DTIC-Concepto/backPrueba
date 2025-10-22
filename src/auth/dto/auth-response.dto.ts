@@ -32,6 +32,13 @@ class UserResponseDto {
   correo: string;
 
   @ApiProperty({ 
+    description: 'URL de la foto de perfil del usuario',
+    example: 'https://example.com/photos/juan-perez.jpg',
+    required: false
+  })
+  foto?: string;
+
+  @ApiProperty({ 
     description: 'Rol activo en la sesión actual', 
     enum: RolEnum,
     example: RolEnum.ADMINISTRADOR 
