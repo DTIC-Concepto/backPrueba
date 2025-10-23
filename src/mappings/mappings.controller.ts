@@ -642,7 +642,7 @@ export class RaaRaMappingsController {
   constructor(private readonly mappingsService: MappingsService) {}
 
   @Post('raa-ra')
-  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR)
+  @Roles(RolEnum.COORDINADOR, RolEnum.ADMINISTRADOR, RolEnum.PROFESOR, RolEnum.DECANO, RolEnum.JEFE_DEPARTAMENTO, RolEnum.SUBDECANO)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Crear una relación RAA-RA',
