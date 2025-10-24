@@ -3,7 +3,6 @@ import requests
 import json
 import smtplib
 from email.message import EmailMessage
-# Librería de Google Gemini
 from google import genai
 from google.genai.errors import APIError
 
