@@ -8,14 +8,19 @@ import {
   AllowNull,
   Unique,
   BelongsTo,
+  BelongsToMany,
   ForeignKey,
   CreatedAt,
   UpdatedAt,
+  HasMany,
 } from 'sequelize-typescript';
 import { ApiProperty } from '@nestjs/swagger';
 import { FacultadModel } from '../../facultades/models/facultad.model';
 import { UsuarioModel } from '../../usuarios/models/usuario.model';
 import { ModalidadEnum } from '../../common/enums/modalidad.enum';
+import { AsignaturaModel } from '../../asignaturas/models/asignatura.model';
+import { CarreraAsignaturaModel } from '../../asignaturas/models/carrera-asignatura.model';
+import { UsuarioCarreraModel } from '../../common/models/usuario-carrera.model';
 
 @Table({
   tableName: 'carreras',
@@ -46,7 +51,7 @@ export class CarreraModel extends Model<CarreraModel> {
       len: [2, 20],
     },
   })
-  codigo: string;
+  declare codigo: string;
 
   @ApiProperty({
     description: 'Nombre completo de la carrera',
@@ -61,7 +66,7 @@ export class CarreraModel extends Model<CarreraModel> {
       len: [5, 200],
     },
   })
-  nombre: string;
+  declare nombre: string;
 
   @ApiProperty({
     description: 'ID de la facultad a la que pertenece la carrera',
@@ -71,7 +76,7 @@ export class CarreraModel extends Model<CarreraModel> {
   @ForeignKey(() => FacultadModel)
   @AllowNull(false)
   @Column(DataType.INTEGER)
-  facultadId: number;
+  declare facultadId: number;
 
   @ApiProperty({
     description: 'ID del coordinador de la carrera',
@@ -81,7 +86,7 @@ export class CarreraModel extends Model<CarreraModel> {
   @ForeignKey(() => UsuarioModel)
   @AllowNull(false)
   @Column(DataType.INTEGER)
-  coordinadorId: number;
+  declare coordinadorId: number;
 
   @ApiProperty({
     description: 'Duración de la carrera en semestres',
@@ -97,7 +102,7 @@ export class CarreraModel extends Model<CarreraModel> {
       max: 20,
     },
   })
-  duracion: number;
+  declare duracion: number;
 
   @ApiProperty({
     description: 'Modalidad de la carrera',
@@ -109,7 +114,7 @@ export class CarreraModel extends Model<CarreraModel> {
     type: DataType.ENUM(...Object.values(ModalidadEnum)),
     defaultValue: ModalidadEnum.PRESENCIAL,
   })
-  modalidad: ModalidadEnum;
+  declare modalidad: ModalidadEnum;
 
   @ApiProperty({
     description: 'Estado activo de la carrera',
@@ -120,7 +125,7 @@ export class CarreraModel extends Model<CarreraModel> {
     type: DataType.BOOLEAN,
     defaultValue: true,
   })
-  estadoActivo: boolean;
+  declare estadoActivo: boolean;
 
   @ApiProperty({
     description: 'Fecha de creación del registro',
@@ -142,4 +147,16 @@ export class CarreraModel extends Model<CarreraModel> {
 
   @BelongsTo(() => UsuarioModel, { foreignKey: 'coordinadorId', as: 'coordinador' })
   coordinador: UsuarioModel;
+
+  // Relación Many-to-Many con Asignaturas
+  @BelongsToMany(() => AsignaturaModel, () => CarreraAsignaturaModel)
+  asignaturas: AsignaturaModel[];
+
+  // Relación Many-to-Many con Usuarios (profesores asignados)
+  @BelongsToMany(() => UsuarioModel, () => UsuarioCarreraModel)
+  profesores: UsuarioModel[];
+
+  // Relación con la tabla intermedia usuario_carreras
+  @HasMany(() => UsuarioCarreraModel, { foreignKey: 'carreraId', as: 'usuarioCarreras' })
+  usuarioCarreras: UsuarioCarreraModel[];
 }

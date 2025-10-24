@@ -9,6 +9,7 @@ import { AuthController } from './auth.controller';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { AuditoriaModule } from '../auditoria/auditoria.module';
 import { CarreraModel } from '../carreras/models/carrera.model';
+import { UsuarioCarreraModel } from '../common/models/usuario-carrera.model';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
@@ -26,7 +27,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     }),
     UsuariosModule,
     AuditoriaModule,
-    SequelizeModule.forFeature([CarreraModel]),
+    SequelizeModule.forFeature([CarreraModel, UsuarioCarreraModel]),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

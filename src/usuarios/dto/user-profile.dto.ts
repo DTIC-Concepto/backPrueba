@@ -60,6 +60,7 @@ export class UserProfileDto {
   })
   correo: string;
 
+
   @ApiProperty({
     description: 'Rol activo del usuario en la sesión actual',
     enum: RolEnum,

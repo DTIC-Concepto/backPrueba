@@ -4,6 +4,7 @@ import { InjectModel } from '@nestjs/sequelize';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { CarreraModel } from '../carreras/models/carrera.model';
+import { UsuarioCarreraModel } from '../common/models/usuario-carrera.model';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
@@ -17,6 +18,8 @@ export class AuthService {
     private readonly auditoriaService: AuditoriaService,
     @InjectModel(CarreraModel)
     private readonly carreraModel: typeof CarreraModel,
+    @InjectModel(UsuarioCarreraModel)
+    private readonly usuarioCarreraModel: typeof UsuarioCarreraModel,
   ) {}
 
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
@@ -80,25 +83,46 @@ export class AuthService {
 
     const access_token = this.jwtService.sign(payload);
 
-    // Buscar información de la carrera si el usuario es coordinador
-    let carreraInfo: any = undefined;
-    const isCoordinador = userRoles.includes(RolEnum.COORDINADOR) || rol === RolEnum.COORDINADOR;
+    // Buscar todas las carreras asignadas al usuario desde usuario_carreras
+    let carrerasInfo: any[] = [];
+    const isProfesorOrCoordinador = 
+      userRoles.includes(RolEnum.COORDINADOR) || 
+      userRoles.includes(RolEnum.PROFESOR) ||
+      rol === RolEnum.COORDINADOR || 
+      rol === RolEnum.PROFESOR;
     
-    if (isCoordinador) {
-      const carrera = await this.carreraModel.findOne({
-        where: { coordinadorId: user.id },
-        attributes: ['id', 'codigo', 'nombre', 'duracion', 'modalidad'],
+    if (isProfesorOrCoordinador) {
+      const usuarioCarreras = await this.usuarioCarreraModel.findAll({
+        where: { 
+          usuarioId: user.id,
+          estadoActivo: true,
+        },
+        include: [
+          {
+            model: CarreraModel,
+            attributes: ['id', 'codigo', 'nombre', 'duracion', 'modalidad'],
+          },
+        ],
       });
       
-      if (carrera) {
-        carreraInfo = {
-          id: carrera.id,
-          codigo: carrera.codigo,
-          nombre: carrera.nombre,
-          duracion: carrera.duracion,
-          modalidad: carrera.modalidad,
-        };
+      if (usuarioCarreras && usuarioCarreras.length > 0) {
+        carrerasInfo = usuarioCarreras.map(uc => ({
+          id: uc.carrera.id,
+          codigo: uc.carrera.codigo,
+          nombre: uc.carrera.nombre,
+          duracion: uc.carrera.duracion,
+          modalidad: uc.carrera.modalidad,
+          esCoordinador: uc.esCoordinador,
+        }));
       }
+    }
+
+    // Para mantener compatibilidad, si hay carreras, usar la primera (o la de coordinador)
+    let carreraInfo: any = undefined;
+    if (carrerasInfo.length > 0) {
+      // Priorizar la carrera donde es coordinador
+      const carreraCoordinador = carrerasInfo.find(c => c.esCoordinador);
+      carreraInfo = carreraCoordinador || carrerasInfo[0];
     }
 
     // Registrar evento de login exitoso con el rol seleccionado
@@ -111,11 +135,13 @@ export class AuthService {
         nombres: user.nombres,
         apellidos: user.apellidos,
         correo: user.correo,
+        //foto: user.foto || undefined,
         rol: rol, // Rol seleccionado para esta sesión
         rolPrincipal: user.rol, // Rol principal del usuario
         rolesDisponibles: userRoles as RolEnum[], // Todos los roles del usuario
         estadoActivo: user.estadoActivo,
-        carrera: carreraInfo, // Información de la carrera si es coordinador
+        carrera: carreraInfo, // Información de la carrera principal (LEGACY - para mantener compatibilidad)
+        carreras: carrerasInfo, // Todas las carreras asignadas (NUEVO)
       },
     };
   }

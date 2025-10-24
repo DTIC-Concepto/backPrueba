@@ -359,7 +359,7 @@ export class UsuariosService {
     return this.usuarioModel.findOne({
       where: { correo },
       // Incluir explícitamente todos los campos incluyendo la contraseña
-      attributes: ['id', 'nombres', 'apellidos', 'cedula', 'correo', 'contrasena', 'rol', 'estadoActivo', 'createdAt', 'updatedAt'],
+      attributes: ['id', 'nombres', 'apellidos', 'cedula', 'correo', 'contrasena','rol', 'estadoActivo', 'createdAt', 'updatedAt'],
     });
   }
 
@@ -556,6 +556,7 @@ export class UsuariosService {
       apellidos: usuario.apellidos,
       cedula: usuario.cedula,
       correo: usuario.correo,
+      //foto: usuario.foto || undefined,
       rol: (rolActivo as RolEnum) || usuario.rol, // Usar el rol activo del JWT o el rol principal como fallback
       rolPrincipal: usuario.rol, // El rol principal del usuario
       rolesDisponibles, // Todos los roles disponibles

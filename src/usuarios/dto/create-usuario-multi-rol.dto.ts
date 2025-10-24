@@ -10,7 +10,8 @@ import {
   IsPositive, 
   IsArray, 
   ArrayMinSize,
-  ValidateNested
+  ValidateNested,
+  IsUrl
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -82,6 +83,7 @@ export class CreateUsuarioMultiRolDto {
   @IsString()
   @MinLength(6)
   contrasena: string;
+
 
   @ApiProperty({
     description: 'Rol principal del usuario (para compatibilidad con sistema anterior). Este rol también debe estar incluido en la lista de roles.',

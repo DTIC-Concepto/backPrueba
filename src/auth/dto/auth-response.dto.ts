@@ -16,6 +16,13 @@ class CarreraInfoDto {
 
   @ApiProperty({ description: 'Modalidad de la carrera', example: 'PRESENCIAL' })
   modalidad: string;
+
+  @ApiProperty({ 
+    description: 'Indica si el usuario es coordinador de esta carrera', 
+    example: true,
+    required: false 
+  })
+  esCoordinador?: boolean;
 }
 
 class UserResponseDto {
@@ -57,11 +64,18 @@ class UserResponseDto {
   estadoActivo: boolean;
 
   @ApiProperty({ 
-    description: 'Información de la carrera si el usuario es coordinador',
+    description: 'Información de la carrera principal (primera o la de coordinador) - LEGACY',
     type: CarreraInfoDto,
     required: false
   })
   carrera?: CarreraInfoDto;
+
+  @ApiProperty({ 
+    description: 'Lista de todas las carreras asignadas al usuario (como profesor o coordinador)',
+    type: [CarreraInfoDto],
+    required: false
+  })
+  carreras?: CarreraInfoDto[];
 }
 
 export class AuthResponseDto {

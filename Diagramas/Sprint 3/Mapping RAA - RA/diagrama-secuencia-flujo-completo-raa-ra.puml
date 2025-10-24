@@ -1,0 +1,86 @@
+@startuml HU8084 - Flujo Completo Vincular RAA con RA
+
+title HU8084: Flujo para crear relación RAA-RA
+
+actor "Usuario (Coordinador/Profesor/etc)" as User
+participant "Frontend" as FE
+participant "JWT Guard" as JWT
+participant "Roles Guard" as RG
+participant "RaaController" as RC
+participant "RaaService" as RS
+participant "MappingsController" as MC
+participant "MappingsService" as MS
+participant "ResultadoAprendizajeModel" as RA
+participant "RaaModel" as RAA
+
+== 1. Obtener todos los RAA de una asignatura ==
+User -> FE: Accede a la vista de mapeo RAA-RA
+FE -> RC: GET /raa?asignaturaId={id}
+activate RC
+RC -> JWT: Validar token JWT
+JWT --> RC: Token válido
+RC -> RG: Verificar rol autorizado
+RG --> RC: Rol autorizado
+RC -> RS: findAll({asignaturaId})
+RS -> RAA: findAll({asignaturaId})
+RAA --> RS: Lista de RAAs
+RS --> RC: Lista de RAAs
+
+RC --> FE: 200 OK [RAAs]
+deactivate RC
+note right of FE
+  Usuario selecciona un RAA
+end note
+
+== 2. Obtener los RA disponibles para ese RAA ==
+FE -> MC: GET /mappings/raa-ra/available-ras?raaId={id}&carreraId={id}
+activate MC
+MC -> JWT: Validar token JWT
+JWT --> MC: Token válido
+MC -> RG: Verificar rol autorizado
+RG --> MC: Rol autorizado
+MC -> MS: getAvailableRAsForRaa(raaId, carreraId)
+MS -> RA: findAll({carreraId, excluyendo los ya mapeados con raaId})
+RA --> MS: Lista de RAs disponibles
+MS --> MC: Lista de RAs disponibles
+
+MC --> FE: 200 OK [RAs disponibles]
+deactivate MC
+note right of FE
+  Usuario selecciona un RA disponible
+end note
+
+== 3. Crear la relación RAA-RA ==
+note right of FE
+  El usuario debe completar y enviar:
+  - raaId: number (seleccionado)
+  - resultadoAprendizajeId: number (seleccionado)
+  - nivelAporte: enum (Alto, Medio, Bajo)
+  - justificacion: string (opcional)
+  - estadoActivo: boolean (opcional)
+end note
+FE -> MC: POST /mappings/raa-ra {raaId, resultadoAprendizajeId, nivelAporte, justificacion?, estadoActivo?}
+activate MC
+MC -> JWT: Validar token JWT
+JWT --> MC: Token válido
+MC -> RG: Verificar rol autorizado
+RG --> MC: Rol autorizado
+MC -> MS: createRaaRaMapping(dto)
+MS -> RAA: findByPk(raaId)
+RAA --> MS: RAA encontrado
+MS -> RA: findByPk(resultadoAprendizajeId)
+RA --> MS: RA encontrado
+MS -> MS: Validar unicidad y reglas de negocio
+alt Relación válida
+    MS -> MS: Crear RAA-RA
+    MS --> MC: RAA-RA creada
+    MC --> FE: 201 Created {RAA-RA}
+    FE --> User: ✅ Relación RAA-RA creada exitosamente
+else Error de validación
+    MS --> MC: throw BadRequestException
+    MC --> FE: 400 BadRequest "Error de validación"
+    FE --> User: Error
+end
+
+deactivate MC
+@enduml

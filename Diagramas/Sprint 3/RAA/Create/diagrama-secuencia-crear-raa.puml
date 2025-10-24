@@ -1,0 +1,67 @@
+@startuml HU8074 - Crear RAA
+
+title HU8074: Registrar nuevo Resultado de Aprendizaje de Asignatura (RAA)
+
+actor "Usuario (Coordinador/Profesor/etc)" as User
+participant "Frontend" as FE
+participant "JWT Guard" as JWT
+participant "Roles Guard" as RG
+participant "RaaController" as RC
+participant "RaaService" as RS
+participant "CarreraAsignaturaModel" as CA
+participant "RaaModel" as RAA
+
+User -> FE: Accede al formulario de crear RAA
+activate FE
+note right of FE
+  El usuario debe completar y enviar:
+  - codigo: string (único por carrera-asignatura)
+  - tipo: enum (Conocimientos, Destrezas, Valores y actitudes)
+  - descripcion: string
+  - asignaturaId: number (ID de la asignatura a la que pertenece el RAA)
+  - estadoActivo: boolean (opcional)
+end note
+
+User -> FE: Envía POST /raa {codigo, tipo, descripcion, asignaturaId, estadoActivo?}
+FE -> RC: POST /raa {...}
+activate RC
+
+RC -> JWT: Validar token JWT
+activate JWT
+JWT --> RC: Token válido
+RC -> RG: Verificar rol autorizado
+activate RG
+RG --> RC: Rol autorizado
+
+RC -> RS: create(createRaaDto)
+activate RS
+
+RS -> CA: findAll({asignaturaId})
+CA --> RS: Relaciones carrera-asignatura
+alt No existen relaciones
+    RS --> RC: throw BadRequestException
+    RC --> FE: 400 BadRequest "No existe relación carrera-asignatura"
+    FE --> User: Error
+else Existen relaciones
+    loop Por cada relación carrera-asignatura
+        RS -> RAA: findOne({codigo, carreraAsignaturaId})
+        alt No existe RAA
+            RS -> RAA: create({...})
+            RAA --> RS: Nuevo RAA
+        end
+    end
+    alt Ningún RAA creado
+        RS --> RC: throw BadRequestException
+        RC --> FE: 400 BadRequest "RAA ya existe para todas las carreras"
+        FE --> User: Error
+    else Al menos un RAA creado
+        RS -> RAA: findByPk(id)
+        RAA --> RS: RAA creado
+        RS --> RC: RAA creado
+        RC --> FE: 201 Created {RAA}
+        FE --> User: ✅ RAA registrado exitosamente
+    end
+end
+
+deactivate FE
+@enduml

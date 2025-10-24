@@ -82,41 +82,21 @@ describe('MappingsService', () => {
   };
 
   beforeEach(async () => {
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MappingsService,
-        {
-          provide: getModelToken(RaOppModel),
-          useValue: mockRaOppRepository,
-        },
-        {
-          provide: getModelToken(RaEuraceModel),
-          useValue: {
-            create: jest.fn(),
-            findAll: jest.fn(),
-            findOne: jest.fn(),
-            destroy: jest.fn(),
-          },
-        },
-        {
-          provide: getModelToken(ResultadoAprendizajeModel),
-          useValue: mockRaRepository,
-        },
-        {
-          provide: getModelToken(OppModel),
-          useValue: mockOppRepository,
-        },
-        {
-          provide: getModelToken(EurAceModel),
-          useValue: {
-            findByPk: jest.fn(),
-            findAll: jest.fn(),
-          },
-        },
-        {
-          provide: Sequelize,
-          useValue: mockSequelize,
-        },
+        { provide: getModelToken(RaOppModel), useValue: mockRaOppRepository },
+        { provide: getModelToken(RaEuraceModel), useValue: { create: jest.fn(), findAll: jest.fn(), findOne: jest.fn(), destroy: jest.fn() } },
+        { provide: getModelToken(ResultadoAprendizajeModel), useValue: mockRaRepository },
+        { provide: getModelToken(OppModel), useValue: mockOppRepository },
+        { provide: getModelToken(EurAceModel), useValue: { findByPk: jest.fn(), findAll: jest.fn() } },
+        // Mocks para dependencias adicionales requeridas por el constructor
+        { provide: getModelToken(require('./models/raa-ra.model').RaaRaModel), useValue: {} },
+        { provide: getModelToken(require('../asignaturas/models/carrera-asignatura.model').CarreraAsignaturaModel), useValue: {} },
+        { provide: getModelToken(require('../asignaturas/models/asignatura.model').AsignaturaModel), useValue: {} },
+  { provide: getModelToken(require('../raa/models/raa.model').RaaModel), useValue: {} },
+  { provide: Sequelize, useValue: mockSequelize },
       ],
     }).compile();
 

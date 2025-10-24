@@ -1,0 +1,54 @@
+@startuml HU8080 - Obtener Asignaturas con Filtros
+
+title HU8080: Obtener asignaturas con filtros
+
+actor "Usuario (Cualquier rol autorizado)" as User
+participant "Frontend" as FE
+participant "JWT Guard" as JWT
+participant "Roles Guard" as RG
+participant "AsignaturasController" as AC
+participant "AsignaturasService" as AS
+participant "Sequelize ORM" as ORM
+participant "CarreraModel" as Carrera
+
+User -> FE: Accede a la vista de asignaturas
+activate FE
+note right of FE
+  El usuario puede aplicar filtros:
+  - search (código, nombre, descripción)
+  - carreraId
+  - nivelReferencial
+  - creditos
+  - tipoAsignatura
+  - unidadCurricular
+  - pensum
+end note
+
+User -> FE: Solicita listado con filtros (GET /asignaturas?filtros)
+FE -> AC: GET /asignaturas?filtros
+activate AC
+
+AC -> JWT: Validar token JWT
+activate JWT
+JWT --> AC: Token válido
+AC -> RG: Verificar rol autorizado
+activate RG
+RG --> AC: Rol autorizado
+
+AC -> AS: findAll(filterDto)
+activate AS
+
+AS -> ORM: Buscar asignaturas con filtros
+note right of ORM
+  - Filtro por search: LIKE en código, nombre, descripción
+  - Filtro por carreraId: INNER JOIN con CarreraModel
+  - Filtros directos: nivelReferencial, creditos, tipoAsignatura, unidadCurricular, pensum
+end note
+
+ORM --> AS: Lista de asignaturas (con carreras asociadas)
+AS --> AC: Lista de asignaturas
+AC --> FE: 200 OK\n[asignaturas]
+FE --> User: Muestra resultados filtrados
+
+deactivate FE
+@enduml

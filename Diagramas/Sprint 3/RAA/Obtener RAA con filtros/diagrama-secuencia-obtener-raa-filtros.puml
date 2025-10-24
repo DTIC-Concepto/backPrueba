@@ -1,0 +1,52 @@
+@startuml HU8075 - Obtener RAAs con Filtros
+
+title HU8075: Obtener RAAs con filtros
+
+actor "Usuario (Cualquier rol autorizado)" as User
+participant "Frontend" as FE
+participant "JWT Guard" as JWT
+participant "Roles Guard" as RG
+participant "RaaController" as RC
+participant "RaaService" as RS
+participant "RaaModel" as RAA
+participant "CarreraAsignaturaModel" as CA
+
+User -> FE: Accede a la vista de RAAs
+activate FE
+note right of FE
+  El usuario puede aplicar filtros:
+  - search (código, descripción)
+  - carreraAsignaturaId
+  - asignaturaId
+  - carreraId
+  - tipo
+end note
+
+User -> FE: Solicita listado con filtros (GET /raa?filtros)
+FE -> RC: GET /raa?filtros
+activate RC
+
+RC -> JWT: Validar token JWT
+activate JWT
+JWT --> RC: Token válido
+RC -> RG: Verificar rol autorizado
+activate RG
+RG --> RC: Rol autorizado
+
+RC -> RS: findAll(filterDto)
+activate RS
+
+RS -> RAA: findAll({where: filtros, include: carreraAsignatura})
+note right of RAA
+  - Filtro por search: LIKE en código o descripción
+  - Filtro por carreraAsignaturaId: directo
+  - Filtro por asignaturaId/carreraId: JOIN con CarreraAsignaturaModel
+  - Filtro por tipo
+end note
+RAA --> RS: Lista de RAAs (con relaciones)
+RS --> RC: Lista de RAAs
+RC --> FE: 200 OK\n[RAAs]
+FE --> User: Muestra resultados filtrados
+
+deactivate FE
+@enduml
