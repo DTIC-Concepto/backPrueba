@@ -70,7 +70,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run report generation
-        run: python scripts/report_commit.py
+        run: python scripts/risk_pipeline.py
 
   deploy:
     name: Deploy to Railway
