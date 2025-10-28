@@ -154,5 +154,7 @@ jobs:
       - name: Ejecutar análisis de priorización crítica
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
         run: python scripts/sonar_priorizacion.py
 
