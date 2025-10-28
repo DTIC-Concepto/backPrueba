@@ -1,6 +1,4 @@
+requests
 pandas
 matplotlib
-scikit-learn
-mlflow
-requests
-nltk
+google-genai
