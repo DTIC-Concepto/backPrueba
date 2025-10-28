@@ -3,7 +3,8 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - dev/erik
+      - dev/jose
+      - main
   pull_request:
     types: [opened, synchronize, reopened]
 
@@ -157,4 +158,18 @@ jobs:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
         run: python scripts/sonar_priorizacion.py
+  deploy:
+    name: Deploy to Railway
+    needs: sonar-prioritization
+    runs-on: ubuntu-latest
+    if: success()
+    container: ghcr.io/railwayapp/cli:latest
+    env:
+      SVC_ID: 3f54df2e-6432-406e-a6d1-3d7d78b99dff
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
+      - name: Deploy to Railway
+        run: railway up --service=${{ env.SVC_ID }}

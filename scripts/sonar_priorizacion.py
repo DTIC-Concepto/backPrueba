@@ -25,9 +25,10 @@ MAX_INPUT_CHARS = 70000
 EMAIL_CONFIG = {
     "SENDER_EMAIL": os.getenv("EMAIL_USER"),
     "SENDER_PASSWORD":  os.getenv("EMAIL_PASS"),
-    "RECEIVER_EMAIL": "erik.gaibor@epn.edu.ec",
+    "RECEIVER_EMAIL": ["erik.gaibor@epn.edu.ec", "kevin.lema02@epn.edu.ec","jose.teran@epn.edu.ec"],
     "SMTP_SERVER": "smtp.gmail.com",
     "SMTP_PORT": 587
+
 }
 # ==========================================================
 
@@ -187,7 +188,7 @@ def send_email_report(report_text, subject, report_filename, json_filename):
     try:
         msg = MIMEMultipart()
         msg['From'] = EMAIL_CONFIG["SENDER_EMAIL"]
-        msg['To'] = EMAIL_CONFIG["RECEIVER_EMAIL"]
+        msg['To'] = ", ".join(EMAIL_CONFIG["RECEIVER_EMAIL"]) if isinstance(EMAIL_CONFIG["RECEIVER_EMAIL"], (list, tuple)) else EMAIL_CONFIG["RECEIVER_EMAIL"]
         msg['Subject'] = subject
 
         # Cuerpo del correo
@@ -213,6 +214,7 @@ def send_email_report(report_text, subject, report_filename, json_filename):
         with smtplib.SMTP(EMAIL_CONFIG["SMTP_SERVER"], EMAIL_CONFIG["SMTP_PORT"]) as server:
             server.starttls()  # Habilitar seguridad TLS
             server.login(EMAIL_CONFIG["SENDER_EMAIL"], EMAIL_CONFIG["SENDER_PASSWORD"])
+            # sendmail acepta lista de destinatarios
             server.sendmail(EMAIL_CONFIG["SENDER_EMAIL"], EMAIL_CONFIG["RECEIVER_EMAIL"], msg.as_string())
         
         print(f"✅ Informe legible y JSON enviados con éxito a {EMAIL_CONFIG['RECEIVER_EMAIL']}!")
