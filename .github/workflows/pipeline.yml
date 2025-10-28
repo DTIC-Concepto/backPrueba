@@ -165,7 +165,7 @@ jobs:
     if: success()
     container: ghcr.io/railwayapp/cli:latest
     env:
-      SVC_ID: 3f54df2e-6432-406e-a6d1-3d7d78b99dff
+      SVC_ID: ${{ secrets.SVC_ID }}
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
       - name: Checkout Code
