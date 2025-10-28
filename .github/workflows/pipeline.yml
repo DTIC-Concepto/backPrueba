@@ -3,8 +3,7 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - dev/jose
-      - main
+      - dev/erik
   pull_request:
     types: [opened, synchronize, reopened]
 
@@ -119,19 +118,41 @@ jobs:
 
       - name: Run report generation
         run: python scripts/risk_pipeline.py
+      
+      - name: Subir deuda_tecnica_informe.txt como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: deuda-tecnica
+          path: deuda_tecnica_informe.txt
 
-  deploy:
-    name: Deploy to Railway
-    needs: risk-analysis
+sonar-prioritization:
     runs-on: ubuntu-latest
-    if: success()
-    container: ghcr.io/railwayapp/cli:latest
-    env:
-      SVC_ID: 3f54df2e-6432-406e-a6d1-3d7d78b99dff
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    needs: risk-analysis  
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
 
-      - name: Deploy to Railway
-        run: railway up --service=${{ env.SVC_ID }}
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Descargar artefacto deuda_tecnica_informe.txt
+        uses: actions/download-artifact@v4
+        with:
+          name: deuda-tecnica
+          path: .
+
+      - name: Verificar archivo descargado
+        run: |
+          ls -lh deuda_tecnica_informe.txt
+          head -n 20 deuda_tecnica_informe.txt
+
+      - name: Instalar dependencias necesarias
+        run: pip install requests
+
+      - name: Ejecutar análisis de priorización crítica
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python sonar_priorizacion.py
+
