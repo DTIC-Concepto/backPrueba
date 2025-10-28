@@ -125,7 +125,7 @@ jobs:
           name: deuda-tecnica
           path: deuda_tecnica_informe.txt
 
-sonar-prioritization:
+  sonar-prioritization:
     runs-on: ubuntu-latest
     needs: risk-analysis  
     steps:
