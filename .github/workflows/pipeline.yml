@@ -3,6 +3,7 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
+      - dev/jose
       - main
   pull_request:
     types: [opened, synchronize, reopened]
@@ -89,12 +90,13 @@ jobs:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
 
-  informe-sonar:
+  risk-analysis:
+    name: Generate Sonar Report (Python)
     needs: ci
     runs-on: ubuntu-latest
     if: success()
     env:
-      COMMIT: ${{ needs.ci.outputs.COMMIT }}
+      GITHUB_REF_NAME: ${{ github.ref_name }}
       EMAIL_USER: ${{ secrets.EMAIL_USER }}
       EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
       GH_PAT: ${{ secrets.GH_PAT }}
@@ -115,16 +117,8 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # 🔹 Descargar artefactos de logs del job CI
-      - name: Download Test Logs Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: test-logs-${{ env.COMMIT }}
-          path: logs/
-
-      # 🔹 Generar reporte y enviar correo con logs adjuntos
-      - name: Run report and send email
-        run: python scripts/report_commit.py
+      - name: Run report generation
+        run: python scripts/risk_pipeline.py
 
   deploy:
     name: Deploy to Railway
