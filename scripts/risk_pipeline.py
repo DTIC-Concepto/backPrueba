@@ -386,9 +386,11 @@ def main():
     )
     
     # Limpiar archivos temporales
-    for f in attachments_list:
-        if os.path.exists(f):
-            os.remove(f)
+    # En CI (GitHub Actions) no remover los archivos para que el workflow pueda subir los artefactos.
+    if not os.getenv("GITHUB_ACTIONS"):
+        for f in attachments_list:
+            if os.path.exists(f):
+                os.remove(f)
             
     print("Fin del pipeline.")
 
